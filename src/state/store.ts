@@ -13,6 +13,7 @@ import {
   OnEdgesChange,
   OnNodesChange,
   OnSelectionChangeParams,
+  type Viewport,
 } from "@xyflow/react";
 import { flushSync } from "react-dom";
 import { create } from "zustand";
@@ -51,6 +52,17 @@ import { getLayoutedGraph } from "@/lib/layout/dagre.utils";
 import { applySavedPositions, toNodeIndex } from "@/lib/layout/layout.helpers";
 import { getCodeFromUrl, setCodeInUrl } from "@/lib/url.helpers";
 import { toMapId } from "@/lib/utils";
+import {
+  deserializeSavedView,
+  sanitizeSavedView,
+  SAVED_VIEWS_STORAGE_KEY,
+  serializeSavedView,
+  type SavedCanvasView,
+} from "@/lib/views/saved-views";
+import {
+  collectHiddenNodeIds,
+  toggleStructureHiddenRoot,
+} from "@/lib/views/structure-tree";
 import { NodePositionIndex, NodeType, NodeTypes } from "@/types/nodes.types";
 import type { CompilerError, Database } from "@dbml/core";
 import { debounce } from "lodash-es";
@@ -97,6 +109,11 @@ export type AppState = {
   isExporting: boolean;
   highlightedFieldId: string | null;
   pendingFlowFocus: FlowFocusRequest | null;
+  savedViews: SavedCanvasView[];
+  activeViewId: string | null;
+  viewDrawerOpen: boolean;
+  hiddenRootNodeIds: Set<string>;
+  hiddenNodeIds: Set<string>;
 
   //initialisation
   initState: () => void;
@@ -137,6 +154,12 @@ export type AppState = {
   setSavedPositions: (nodes: Node[]) => void;
   onLayout: (direction: string, fitView: FitView) => void;
   withExportRendering: <T>(fn: () => Promise<T>) => Promise<T>;
+  loadSavedViews: () => void;
+  setViewDrawerOpen: (open: boolean) => void;
+  applySavedView: (viewId: string) => SavedCanvasView | null;
+  saveActiveView: (viewport: Viewport) => void;
+  saveViewAs: (name: string, viewport: Viewport) => void;
+  toggleNodeHidden: (nodeId: string) => void;
 };
 
 const debounceTime = 600;
@@ -152,6 +175,36 @@ const setPositionsInCodeDebounced = debounce(
   },
   debounceTime,
 );
+
+function readSavedViews(): SavedCanvasView[] {
+  if (typeof window === "undefined") return [];
+  const raw = window.localStorage.getItem(SAVED_VIEWS_STORAGE_KEY);
+  if (!raw) return [];
+
+  try {
+    const values = JSON.parse(raw) as unknown[];
+    return values
+      .map(deserializeSavedView)
+      .filter((view) => view.id && view.name);
+  } catch {
+    return [];
+  }
+}
+
+function writeSavedViews(views: SavedCanvasView[]) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(
+    SAVED_VIEWS_STORAGE_KEY,
+    JSON.stringify(views.map(serializeSavedView)),
+  );
+}
+
+function createViewId() {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+  return `view-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
 
 // this is our useStore hook that we can use in our components to get parts of the store and call actions
 const useStore = create<AppState>((set, get) => ({
@@ -179,9 +232,20 @@ const useStore = create<AppState>((set, get) => ({
   isExporting: false,
   highlightedFieldId: null,
   pendingFlowFocus: null,
+  savedViews: [],
+  activeViewId: null,
+  viewDrawerOpen: true,
+  hiddenRootNodeIds: new Set<string>(),
+  hiddenNodeIds: new Set<string>(),
   initState: () => {
+    const savedViews = readSavedViews();
     const code = getCodeFromUrl() || StartupCode;
-    set({ code, savedPositions: extractPositions(code) });
+    set({
+      code,
+      savedPositions: extractPositions(code),
+      savedViews,
+      activeViewId: savedViews[0]?.id ?? null,
+    });
     const res = get().parseDBML(code);
     if (!res.success) return;
   },
@@ -258,9 +322,17 @@ const useStore = create<AppState>((set, get) => ({
       NodeType
     >;
     groupNodes = getBoundedGroups(groupNodes, nodesById);
+    const finalNodes = [...groupNodes, ...tableNodes];
+    const existingNodeIds = new Set(finalNodes.map((node) => node.id));
+    const hiddenRootNodeIds = new Set(
+      [...get().hiddenRootNodeIds].filter((id) => existingNodeIds.has(id)),
+    );
+
     set({
-      nodes: [...groupNodes, ...tableNodes],
+      nodes: finalNodes,
       edges,
+      hiddenRootNodeIds,
+      hiddenNodeIds: collectHiddenNodeIds(finalNodes, hiddenRootNodeIds),
     });
     setSavedPositions(tableNodes);
   },
@@ -399,6 +471,123 @@ const useStore = create<AppState>((set, get) => ({
   // -------- Flow Actions --------
   setfirstRender: (firstRender) => set({ firstRender }),
   setMinimap: (minimap) => set({ minimap }),
+  loadSavedViews: () => {
+    const savedViews = readSavedViews();
+    set({ savedViews, activeViewId: savedViews[0]?.id ?? null });
+  },
+  setViewDrawerOpen: (viewDrawerOpen) => set({ viewDrawerOpen }),
+  applySavedView: (viewId) => {
+    const view = get().savedViews.find((item) => item.id === viewId);
+    if (!view) return null;
+
+    const currentNodeIds = new Set(get().nodes.map((node) => node.id));
+    const sanitized = sanitizeSavedView(view, currentNodeIds);
+    const positionedNodes = applySavedPositions(
+      get().nodes,
+      sanitized.positions,
+    ).map((node) => ({
+      ...node,
+      data: {
+        ...node.data,
+        folded: sanitized.foldedIds.has(node.id),
+      },
+    })) as NodeType[];
+    const tableNodes = positionedNodes.filter((n) => n.type === NodeTypes.Table);
+    const groupNodes = positionedNodes.filter(
+      (n) => n.type === NodeTypes.TableGroup,
+    );
+    const boundedGroupNodes = getBoundedGroups(
+      groupNodes,
+      toMapId([...groupNodes, ...tableNodes]),
+    );
+    const nodes = [...boundedGroupNodes, ...tableNodes];
+    const groupParentById = buildGroupParentIndex(boundedGroupNodes);
+    const database = get().database;
+    const edges = database
+      ? mapDatabaseToEdges(database, sanitized.foldedIds, groupParentById)
+      : get().edges;
+    const hiddenNodeIds = collectHiddenNodeIds(nodes, sanitized.hiddenNodeIds);
+
+    set({
+      activeViewId: viewId,
+      nodes,
+      edges,
+      foldedIds: sanitized.foldedIds,
+      relationOnly: sanitized.relationOnly,
+      relationOnlyOverrides: sanitized.relationOnlyOverrides,
+      hiddenRootNodeIds: sanitized.hiddenNodeIds,
+      hiddenNodeIds,
+    });
+    return sanitized;
+  },
+  saveActiveView: (viewport) => {
+    const {
+      activeViewId,
+      savedViews,
+      savedPositions,
+      foldedIds,
+      relationOnly,
+      relationOnlyOverrides,
+      hiddenRootNodeIds,
+    } = get();
+    if (!activeViewId) return;
+
+    const now = Date.now();
+    const views = savedViews.map((view) =>
+      view.id === activeViewId
+        ? {
+            ...view,
+            updatedAt: now,
+            viewport,
+            positions: savedPositions,
+            foldedIds: new Set(foldedIds),
+            relationOnly,
+            relationOnlyOverrides: new Set(relationOnlyOverrides),
+            hiddenNodeIds: new Set(hiddenRootNodeIds),
+          }
+        : view,
+    );
+    writeSavedViews(views);
+    set({ savedViews: views });
+  },
+  saveViewAs: (name, viewport) => {
+    const {
+      savedViews,
+      savedPositions,
+      foldedIds,
+      relationOnly,
+      relationOnlyOverrides,
+      hiddenRootNodeIds,
+    } = get();
+    const now = Date.now();
+    const view: SavedCanvasView = {
+      id: createViewId(),
+      name: name.trim() || "Untitled view",
+      createdAt: now,
+      updatedAt: now,
+      viewport,
+      positions: savedPositions,
+      foldedIds: new Set(foldedIds),
+      relationOnly,
+      relationOnlyOverrides: new Set(relationOnlyOverrides),
+      hiddenNodeIds: new Set(hiddenRootNodeIds),
+    };
+    const views = [...savedViews, view];
+    writeSavedViews(views);
+    set({ savedViews: views, activeViewId: view.id });
+  },
+  toggleNodeHidden: (nodeId) => {
+    const nodes = get().nodes;
+    const hiddenRootNodeIds = toggleStructureHiddenRoot(
+      nodes,
+      get().hiddenRootNodeIds,
+      nodeId,
+    );
+    set({
+      hiddenRootNodeIds,
+      hiddenNodeIds: collectHiddenNodeIds(nodes, hiddenRootNodeIds),
+    });
+  },
 
   foldNode: (nodeId: string, fold: boolean) => {
     const { foldedIds, nodes } = get();

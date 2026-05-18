@@ -36,6 +36,10 @@ import {
   getNodesCenter,
   getPanOnlyCenterOptions,
 } from "./viewer.helper";
+import {
+  getVisibleGraph,
+} from "@/lib/views/structure-tree";
+import { ViewDrawer } from "./view-drawer";
 
 const nodeTypes = {
   [NodeTypes.Table]: TableNode,
@@ -67,8 +71,10 @@ function ERViewer({ className, ...props }: FlowProps) {
     pendingFlowFocus,
     clearPendingFlowFocus,
     selectFlowTarget,
+    hiddenNodeIds,
   } = useStore();
-  const { fitView, getNode, getZoom, setCenter } = useReactFlow();
+  const { fitView, getNode, getZoom, getViewport, setCenter, setViewport } =
+    useReactFlow();
   const initialized = useNodesInitialized();
 
   useOnSelectionChange({ onChange });
@@ -124,12 +130,13 @@ function ERViewer({ className, ...props }: FlowProps) {
   const map = minimap ? (
     <MiniMap nodeColor={getNodeColor} nodeClassName={getNodeClass} />
   ) : null;
+  const visibleGraph = getVisibleGraph(nodes, edges, hiddenNodeIds);
 
   return (
     <ReactFlow
       className={className}
-      nodes={nodes}
-      edges={edges}
+      nodes={visibleGraph.nodes}
+      edges={visibleGraph.edges}
       nodeTypes={nodeTypes}
       edgeTypes={edgeTypes}
       onNodesChange={onNodesChange}
@@ -170,6 +177,18 @@ function ERViewer({ className, ...props }: FlowProps) {
         <RelationOnlyButton />
         <ExportImageButton />
       </Controls>
+      <ViewDrawer
+        nodes={nodes}
+        getViewport={getViewport}
+        applyViewport={(viewport) => void setViewport(viewport, { duration: 250 })}
+        focusNode={(nodeId) => {
+          selectFlowTarget({ kind: "node", nodeId });
+          const node = getNode(nodeId);
+          if (!node) return;
+          const center = getNodeCenter(node);
+          setCenter(center.x, center.y, getPanOnlyCenterOptions(getZoom()));
+        }}
+      />
       {map}
     </ReactFlow>
   );
