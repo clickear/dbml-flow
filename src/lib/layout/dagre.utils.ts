@@ -1,3 +1,4 @@
+import { sortGroupsByDepth } from "@/lib/flow/groups.helpers";
 import { GroupNodeType, TableNodeType } from "@/types/nodes.types";
 import dagre from "@dagrejs/dagre";
 import { Edge } from "@xyflow/react";
@@ -41,14 +42,23 @@ export function getLayoutedGraph(
     });
   });
 
-  groupNodes.forEach((group) => {
-    dagreGraph.setNode(group.id, {});
+  const groupsByDepth = sortGroupsByDepth(groupNodes);
+  groupsByDepth.forEach((group) => {
+    const size =
+      group.data.dimensions.width > 0
+        ? {
+            width: group.initialWidth ?? group.data.dimensions.width,
+            height: group.initialHeight ?? group.data.dimensions.height,
+          }
+        : {};
+    dagreGraph.setNode(group.id, size);
     if (group.data.nodeIds.length === 0) return;
 
-    if (!group.data.folded)
+    if (!group.data.folded) {
       group.data.nodeIds.forEach((id) => {
         dagreGraph.setParent(id, group.id);
       });
+    }
   });
 
   edges.forEach((edge) => {
@@ -59,6 +69,9 @@ export function getLayoutedGraph(
 
   const newNodes = tableNodes.map((node) => {
     const dagreNode = dagreGraph.node(node.id);
+    if (!dagreNode) {
+      return node;
+    }
 
     const newNode = <TableNodeType>{
       ...node,

@@ -46,7 +46,7 @@ const DBMLEditor: React.FC<{ className?: string }> = ({ className }) => {
   }, [handleCodeChange]);
 
   return (
-    <div className={cn("dbml-editor flex flex-col h-full", className)}>
+    <div className={cn("dbml-editor nokey flex flex-col h-full", className)}>
       <GlobalErrorMessage error={globalError} />
       <div className="flex-1 min-h-0">
         <Editor

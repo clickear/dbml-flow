@@ -8,7 +8,6 @@ import {
 
 import useStore from "@/state/store";
 import {
-  InternalGroupNode,
   InternalTableNode,
   TableEdgeData,
 } from "@/types/nodes.types";
@@ -34,7 +33,8 @@ function TableEdge({
   const sourceTableNode = useInternalNode(source) as InternalTableNode;
   const targetTableNode = useInternalNode(target) as InternalTableNode;
 
-  const { edgesRelativeData } = useStore();
+  const edgesRelativeData = useStore((s) => s.edgesRelativeData);
+  const isExporting = useStore((s) => s.isExporting);
 
   const { edgePath, labelX, labelY, sx, sy, tx, ty, sourcePos, targetPos } =
     useMemo(
@@ -68,7 +68,7 @@ function TableEdge({
       // {...props}
     >
       <EdgeLabels
-        displayed={!!animated}
+        showRefName={!!animated || isExporting}
         displaySource={true}
         displayTarget={true}
         data={data}
@@ -86,7 +86,7 @@ function TableEdge({
 }
 
 export type EdgeLabelsProps = {
-  displayed: boolean;
+  showRefName: boolean;
   displaySource: boolean;
   displayTarget: boolean;
   sx: number;
@@ -101,7 +101,7 @@ export type EdgeLabelsProps = {
 };
 
 export function EdgeLabels({
-  displayed,
+  showRefName,
   displaySource,
   displayTarget,
   sx,
@@ -114,8 +114,6 @@ export function EdgeLabels({
   sourcePos,
   targetPos,
 }: EdgeLabelsProps) {
-  if (!displayed) return null;
-
   const tableEdgeData = data as TableEdgeData;
   const ref = tableEdgeData?.ref;
   const label = ref?.name ?? "";
@@ -126,7 +124,9 @@ export function EdgeLabels({
 
   return (
     <EdgeLabelRenderer>
-      <EdgeLabel label={label} labelX={labelX} labelY={labelY} />
+      {showRefName && label ? (
+        <EdgeLabel label={label} labelX={labelX} labelY={labelY} />
+      ) : null}
       {displaySource && (
         <EdgeMarkerLabel
           label={sourceLabel}
@@ -165,7 +165,7 @@ export function EdgeMarkerLabel({
         transform: `translate(${transX}%, -100%)  translate(${labelX}px,${labelY}px)`,
         padding: 0,
       }}
-      className="nodrag nopan text-[0.6rem]"
+      className="nodrag nopan whitespace-nowrap text-[0.6rem] leading-none"
     >
       {label}
     </div>

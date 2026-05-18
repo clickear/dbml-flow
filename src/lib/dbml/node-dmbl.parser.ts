@@ -1,6 +1,6 @@
 import {
   GROUP_Z_INDEX,
-  TABLE_Z_INDEX
+  TABLE_Z_INDEX,
 } from "@/components/table-constants";
 import {
   GroupNodeType,
@@ -10,19 +10,28 @@ import {
 } from "@/types/nodes.types";
 import { Parser, type Database, type Field, type Table, type TableGroup } from "@dbml/core";
 import { findClosestSize } from "./dbml.math";
+import {
+  getGroupNodeId,
+  type NestedGroupModel,
+} from "./nested-group.parser";
 
 //#region DBML to Nodes
 
 export const parser = new Parser();
 
-export function parseDatabaseToGraph(database: Database) {
+export function parseDatabaseToGraph(
+  database: Database,
+  nestedGroups?: NestedGroupModel,
+) {
   const tables = database.schemas.flatMap((s) => s.tables);
   const groups = database.schemas.flatMap((s) => s.tableGroups);
 
   const tableNodes = tables.map((t) => mapTableToNode(t));
 
   const tableNodesById = new Map(tableNodes.map((n) => [n.id, n]));
-  const groupNodes = groups.map((g) => mapToGroupNode(g, tableNodesById));
+  const groupNodes = groups.map((g) =>
+    mapToGroupNode(g, tableNodesById, nestedGroups),
+  );
 
   return {
     tableNodes,
@@ -33,16 +42,37 @@ export function parseDatabaseToGraph(database: Database) {
 export const paddingX = 20;
 export const paddingY = 20;
 
-function mapToGroupNode(g: TableGroup, nodes: Map<string, TableNodeType>) {
+function mapToGroupNode(
+  g: TableGroup,
+  nodes: Map<string, TableNodeType>,
+  nestedGroups?: NestedGroupModel,
+) {
+  const schemaName = g.schema.name;
+  const nestedDef = nestedGroups?.groups.get(g.name);
+  const tableChildIds = g.tables
+    .map(getTableId)
+    .filter((id): id is string => !!id);
+  const groupChildIds =
+    nestedDef?.members
+      .filter((m) => m.kind === "group")
+      .map((m) => getGroupNodeId(m.name, schemaName)) ?? [];
+  const parentGroupId = nestedDef?.parentGroupName
+    ? getGroupNodeId(nestedDef.parentGroupName, schemaName)
+    : undefined;
+
   return <GroupNodeType>{
     id: getGroupId(g),
     type: NodeTypes.TableGroup,
     zIndex: GROUP_Z_INDEX,
+    position: { x: 0, y: 0 },
     data: {
       label: g.name,
-      nodeIds: g.tables.map(getTableId),
+      nodeIds: [...groupChildIds, ...tableChildIds],
+      parentGroupId,
       color: g.color,
       folded: false,
+      dimensions: { width: 0, height: 0 },
+      bounds: { xMin: 0, xMax: 0, yMin: 0, yMax: 0, width: 0, height: 0 },
     },
   };
 }
@@ -94,7 +124,8 @@ function getBaseId(table: Table | TableGroup) {
 
 //#region Position Store
 
-const positionStoreRegex = /\n?\/\*\s*<posistions>(.*)<\/positions>\s*\*\//m;
+const positionStoreRegex =
+  /\n?\/\*\s*<(?:posistions|positions)>(.*?)<\/(?:positions|posistions)>\s*\*\//s;
 
 export function extractPositions(code: string) {
   const positionMatch = positionStoreRegex.exec(code);
@@ -108,7 +139,6 @@ export function setPositionsInCode(
   savedPositions: NodePositionIndex
 ) {
   const positionMatch = positionStoreRegex.exec(code);
-  console.log("setPositionsInCode");
   const start = positionMatch?.index ?? code.length;
   const end = start + (positionMatch?.[0].length ?? 0);
 

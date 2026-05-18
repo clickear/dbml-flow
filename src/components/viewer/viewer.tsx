@@ -15,7 +15,9 @@ import {
   useNodesInitialized,
   useOnSelectionChange,
   useReactFlow,
+  ViewportPortal,
 } from "@xyflow/react";
+import ExportImageButton from "../controls/export-image-button";
 import RelationOnlyButton from "../controls/field-only-button";
 import MinimapButton from "../controls/minimap-button";
 import RearrangeButton from "../controls/rearrange-button";
@@ -51,6 +53,7 @@ function ERViewer({ className, ...props }: FlowProps) {
     setfirstRender,
     onNodeMouseEnter,
     onNodeMouseLeave,
+    hasTextFocus,
   } = useStore();
   const { fitView } = useReactFlow();
   const initialized = useNodesInitialized();
@@ -86,13 +89,20 @@ function ERViewer({ className, ...props }: FlowProps) {
       fitView
       minZoom={minZoomLevel}
       connectionMode={ConnectionMode.Loose}
+      panActivationKeyCode={hasTextFocus ? null : "Space"}
+      zoomOnScroll={false}
+      panOnScroll
     >
+      <ViewportPortal>
+        <ERMarkers />
+      </ViewportPortal>
       <DevTools />
       <Background />
       <Controls>
         <RearrangeButton />
         <MinimapButton />
         <RelationOnlyButton />
+        <ExportImageButton />
       </Controls>
       {map}
     </ReactFlow>
@@ -101,7 +111,6 @@ function ERViewer({ className, ...props }: FlowProps) {
 
 const Viewer = () => (
   <ReactFlowProvider>
-    <ERMarkers />
     <ERViewer />
   </ReactFlowProvider>
 );

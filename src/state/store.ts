@@ -14,10 +14,15 @@ import {
   OnNodesChange,
   OnSelectionChangeParams,
 } from "@xyflow/react";
+import { flushSync } from "react-dom";
 import { create } from "zustand";
 
 import { StartupCode } from "@/components/editor/editor.constant";
 import { mapDatabaseToEdges } from "@/lib/dbml/edge-dbml.parser";
+import {
+  buildGroupParentIndex,
+  preprocessNestedTableGroups,
+} from "@/lib/dbml/nested-group.parser";
 import {
   extractPositions,
   parseDatabaseToGraph,
@@ -70,6 +75,7 @@ export type AppState = {
   relationOnly: boolean;
   relationOnlyOverrides: Set<string>;
   centeredLayout: boolean;
+  isExporting: boolean;
 
   //initialisation
   initState: () => void;
@@ -82,7 +88,10 @@ export type AppState = {
   setMarkers: (markers: editor.IMarkerData[]) => void;
   setGlobalError: (error: any) => void;
   clearMarkers: () => void;
-  updateViewerFromDatabase: (database: Database) => void;
+  updateViewerFromDatabase: (
+    database: Database,
+    nestedGroups?: ReturnType<typeof preprocessNestedTableGroups>,
+  ) => void;
 
   // Flow Actions
   setfirstRender: (firstRender: boolean) => void;
@@ -100,6 +109,7 @@ export type AppState = {
 
   setSavedPositions: (nodes: Node[]) => void;
   onLayout: (direction: string, fitView: FitView) => void;
+  withExportRendering: <T>(fn: () => Promise<T>) => Promise<T>;
 };
 
 const debounceTime = 600;
@@ -137,6 +147,7 @@ const useStore = create<AppState>((set, get) => ({
   firstRender: true,
   edgesRelativeData: {} as EdgesRelativeData,
   centeredLayout: false,
+  isExporting: false,
   initState: () => {
     const code = getCodeFromUrl() || StartupCode;
     set({ code, savedPositions: extractPositions(code) });
@@ -156,13 +167,14 @@ const useStore = create<AppState>((set, get) => ({
 
   parseDBML: (code) => {
     const { clearMarkers, updateViewerFromDatabase, setMarkers } = get();
-    set({ globalError: null });
+    set({ globalError: null, savedPositions: extractPositions(code) });
     try {
-      const newDB = parser.parse(code, "dbmlv2");
+      const nestedGroups = preprocessNestedTableGroups(code);
+      const newDB = parser.parse(nestedGroups.sanitizedCode, "dbmlv2");
       set({ database: newDB });
 
       clearMarkers();
-      updateViewerFromDatabase(newDB);
+      updateViewerFromDatabase(newDB, nestedGroups);
 
       return { success: true, database: newDB };
     } catch (error: any) {
@@ -177,9 +189,8 @@ const useStore = create<AppState>((set, get) => ({
     }
   },
 
-  updateViewerFromDatabase: (database: Database) => {
+  updateViewerFromDatabase: (database: Database, nestedGroups) => {
     if (!database) return;
-    console.log("database", database);
 
     const { savedPositions: initialSavedPositions, setSavedPositions, centeredLayout } = get();
 
@@ -188,9 +199,13 @@ const useStore = create<AppState>((set, get) => ({
       (n) => n.type === NodeTypes.TableGroup,
     );
 
-    // Get initial layout
-    let { tableNodes, groupNodes } = parseDatabaseToGraph(database);
-    const edges = mapDatabaseToEdges(database, get().foldedIds);
+    let { tableNodes, groupNodes } = parseDatabaseToGraph(database, nestedGroups);
+    const groupParentById = buildGroupParentIndex(groupNodes);
+    const edges = mapDatabaseToEdges(
+      database,
+      get().foldedIds,
+      groupParentById,
+    );
     const savedPositions = initialSavedPositions;
 
     if (
@@ -200,10 +215,13 @@ const useStore = create<AppState>((set, get) => ({
       tableNodes = getLayoutedGraph(tableNodes, groupNodes, edges, centeredLayout);
     }
 
-    // Preserve existing node positions
     tableNodes = applySavedPositions(tableNodes, savedPositions);
 
-    groupNodes = getBoundedGroups(groupNodes, toMapId(tableNodes));
+    const nodesById = toMapId([...groupNodes, ...tableNodes]) as Map<
+      string,
+      NodeType
+    >;
+    groupNodes = getBoundedGroups(groupNodes, nodesById);
     set({
       nodes: [...groupNodes, ...tableNodes],
       edges,
@@ -249,7 +267,13 @@ const useStore = create<AppState>((set, get) => ({
       folded: fold,
     });
     
-    const edges = mapDatabaseToEdges(get().database!, newFoldedIds);
+    const groupNodes = newNodes.filter((n) => n.type === NodeTypes.TableGroup);
+    const groupParentById = buildGroupParentIndex(groupNodes);
+    const edges = mapDatabaseToEdges(
+      get().database!,
+      newFoldedIds,
+      groupParentById,
+    );
 
     set({ foldedIds: newFoldedIds, nodes: newNodes, edges });
   },
@@ -266,7 +290,10 @@ const useStore = create<AppState>((set, get) => ({
       const tableNodes = nodes.filter((n) => n.type === NodeTypes.Table);
       const groupNodes = nodes.filter((n) => n.type === NodeTypes.TableGroup);
 
-      const newGroupNodes = getBoundedGroups(groupNodes, toMapId(tableNodes));
+      const newGroupNodes = getBoundedGroups(
+        groupNodes,
+        toMapId([...groupNodes, ...tableNodes]),
+      );
 
       set({ nodes: [...newGroupNodes, ...tableNodes] });
     }, 0);
@@ -287,7 +314,10 @@ const useStore = create<AppState>((set, get) => ({
       const tableNodes = nodes.filter((n) => n.type === NodeTypes.Table);
       const groupNodes = nodes.filter((n) => n.type === NodeTypes.TableGroup);
 
-      const newGroupNodes = getBoundedGroups(groupNodes, toMapId(tableNodes));
+      const newGroupNodes = getBoundedGroups(
+        groupNodes,
+        toMapId([...groupNodes, ...tableNodes]),
+      );
 
       set({ nodes: [...newGroupNodes, ...tableNodes] });
     }, 0);
@@ -371,13 +401,25 @@ const useStore = create<AppState>((set, get) => ({
 
     const newTableNodes = getLayoutedGraph(tableNodes, groupNodes, edges, centeredLayout);
 
-    const newGroupNodes = getBoundedGroups(groupNodes, toMapId(newTableNodes));
+    const newGroupNodes = getBoundedGroups(
+      groupNodes,
+      toMapId([...groupNodes, ...newTableNodes]),
+    );
 
     set({
       nodes: [...newGroupNodes, ...newTableNodes],
     });
     get().setSavedPositions(tableNodes);
     setTimeout(() => fitView(), 0);
+  },
+
+  withExportRendering: async (fn) => {
+    flushSync(() => set({ isExporting: true }));
+    try {
+      return await fn();
+    } finally {
+      flushSync(() => set({ isExporting: false }));
+    }
   },
 }));
 

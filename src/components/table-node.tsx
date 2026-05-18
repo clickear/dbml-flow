@@ -1,15 +1,12 @@
 import { hasFieldDetails } from "@/lib/dbml/dbml.utils";
+import { isHiddenByFoldedAncestors } from "@/lib/dbml/nested-group.parser";
 import { cn } from "@/lib/utils";
 import useStore from "@/state/store";
-import { InternalGroupNode, type TableNodeType } from "@/types/nodes.types";
+import { type TableNodeType } from "@/types/nodes.types";
 import type { Field, Table } from "@dbml/core";
-import {
-  type NodeProps,
-  useInternalNode,
-  useUpdateNodeInternals,
-} from "@xyflow/react";
+import { type NodeProps, useUpdateNodeInternals } from "@xyflow/react";
 import { StickyNote } from "lucide-react";
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import { BaseNode } from "./base-node";
 import { TableFoldHeader } from "./table-fold-header";
 import { TableField } from "./table-node-field";
@@ -65,19 +62,21 @@ function Header({
     label: data.label,
     folded: data.folded,
   };
+
   if (!hasNote) {
     return <TableFoldHeader {...sharedProps} />;
   }
 
-  const noteIcon = <StickyNote size="1rem" className="pl-1" />;
+  const noteIcon = (
+    <span className="inline-flex min-w-[1.25rem] shrink-0 items-center pl-1">
+      <StickyNote size="1rem" />
+    </span>
+  );
 
   return (
     <TableTooltip>
       <TableTooltipTrigger>
-        <TableFoldHeader
-          {...sharedProps}
-          afterTitle={noteIcon}
-        ></TableFoldHeader>
+        <TableFoldHeader {...sharedProps} afterTitle={noteIcon} />
       </TableTooltipTrigger>
       <TableTooltipContent>
         <TableHeaderTooltipView table={data.table} />
@@ -113,6 +112,9 @@ function TableNodeBody({
         className="p-0 flex flex-col overflow-hidden"
         style={{
           width: data.guessedDimensions?.width,
+          minWidth: data.guessedDimensions?.width,
+          maxWidth: data.guessedDimensions?.width,
+          boxSizing: "border-box",
         }}
         selected={selected}
         hidden={hidden}
@@ -154,8 +156,12 @@ function TableNodeInGroup({
   groupId,
   ...props
 }: NodeProps<TableNodeType> & { groupId: string }) {
-  const groupNode = useInternalNode(groupId) as InternalGroupNode;
-  const hidden = groupNode?.data.folded ?? false;
+  const nodes = useStore((s) => s.nodes);
+  const foldedIds = useStore((s) => s.foldedIds);
+  const hidden = useMemo(
+    () => isHiddenByFoldedAncestors(groupId, nodes, foldedIds),
+    [groupId, nodes, foldedIds],
+  );
   return <TableNodeBody {...props} hidden={hidden} />;
 }
 

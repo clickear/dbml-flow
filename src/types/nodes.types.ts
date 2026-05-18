@@ -33,6 +33,7 @@ export type InternalTableNode = InternalNode & { data: TableNodeData };
 
 export type GroupNodeData = SharedNodeData & {
   nodeIds: string[];
+  parentGroupId?: string;
   dimensions: {
     width: number;
     height: number;

@@ -6,15 +6,17 @@ import {
 } from "@/types/nodes.types";
 import type { Database, Endpoint, Field, Ref } from "@dbml/core";
 import { uniqBy } from "lodash-es";
+import { findOutermostFoldedGroupId } from "./nested-group.parser";
 import { getFieldId, getGroupId, getTableId } from "./node-dmbl.parser";
 
 export function mapDatabaseToEdges(
   database: Database,
-  foldedIds: Set<string>
+  foldedIds: Set<string>,
+  groupParentById: Map<string, string | undefined> = new Map(),
 ): TableEdgeType[] {
   const edges = database.schemas
     .flatMap((s) => s.refs)
-    .map((r) => mapToEdge(r, foldedIds))
+    .map((r) => mapToEdge(r, foldedIds, groupParentById))
     .filter((e) => e.source !== e.target && e.sourceHandle !== e.targetHandle); // remove self loop edges
 
   return uniqBy(
@@ -23,7 +25,11 @@ export function mapDatabaseToEdges(
   ); // remove duplicate edges (can happen folding groups)
 }
 
-export function mapToEdge(ref: Ref, foldedIds: Set<string>) {
+export function mapToEdge(
+  ref: Ref,
+  foldedIds: Set<string>,
+  groupParentById: Map<string, string | undefined>,
+) {
   const sourceEndPoint = ref.endpoints[0];
   const targetEndPoint = ref.endpoints[1];
 
@@ -38,7 +44,7 @@ export function mapToEdge(ref: Ref, foldedIds: Set<string>) {
     folded: sourceFolded,
     relationType: sourceRelationType,
     nodeId: source,
-  } = getHandleData(sourceField, sourceEndPoint, foldedIds);
+  } = getHandleData(sourceField, sourceEndPoint, foldedIds, groupParentById);
 
   const {
     handleId: targetHandle,
@@ -46,7 +52,7 @@ export function mapToEdge(ref: Ref, foldedIds: Set<string>) {
     folded: targetFolded,
     relationType: targetRelationType,
     nodeId: target,
-  } = getHandleData(targetField, targetEndPoint, foldedIds);
+  } = getHandleData(targetField, targetEndPoint, foldedIds, groupParentById);
 
   return <TableEdgeType>{
     id: ref.id.toString(),
@@ -72,7 +78,8 @@ export function mapToEdge(ref: Ref, foldedIds: Set<string>) {
 function getHandleData(
   field: Field,
   endPoint: Endpoint,
-  foldedIds: Set<string>
+  foldedIds: Set<string>,
+  groupParentById: Map<string, string | undefined>,
 ) {
   const tableNodeId = getTableId(field.table)!;
   const groupNodeId = getGroupId(field.table.group);
@@ -81,10 +88,15 @@ function getHandleData(
   let nodeId = tableNodeId;
 
   let folded = false;
-  if (groupNodeId && foldedIds.has(groupNodeId)) {
+  const foldedGroupId = findOutermostFoldedGroupId(
+    groupNodeId,
+    foldedIds,
+    groupParentById,
+  );
+  if (foldedGroupId) {
     folded = true;
-    handleId = groupNodeId;
-    nodeId = groupNodeId;
+    handleId = foldedGroupId;
+    nodeId = foldedGroupId;
   } else if (foldedIds.has(tableNodeId)) {
     folded = true;
     handleId = tableNodeId;
