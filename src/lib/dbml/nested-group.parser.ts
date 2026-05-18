@@ -4,6 +4,7 @@
  */
 
 import { NodeType, NodeTypes } from "@/types/nodes.types";
+import { normalizeIdentifierText, readIdentifier, splitIdentifierPath } from "./source-map";
 
 export type NestedGroupMember =
   | { kind: "table"; name: string }
@@ -25,6 +26,7 @@ type ParsedTableGroupBlock = {
   start: number;
   end: number;
   name: string;
+  rawName: string;
   settings: string;
   body: string;
 };
@@ -64,9 +66,11 @@ export function preprocessNestedTableGroups(code: string): NestedGroupModel {
   for (const block of [...blocks].reverse()) {
     const def = groups.get(block.name)!;
     const tableMembers = def.members.filter((m) => m.kind === "table");
-    const sanitizedBody = tableMembers.map((m) => m.name).join("\n  ");
+    const sanitizedBody = tableMembers
+      .map((m) => formatIdentifier(m.name))
+      .join("\n  ");
     const settingsPart = def.settings ? ` [${def.settings}]` : "";
-    const replacement = `TableGroup ${block.name}${settingsPart} {\n  ${sanitizedBody}\n}`;
+    const replacement = `TableGroup ${block.rawName}${settingsPart} {\n  ${sanitizedBody}\n}`;
     sanitizedCode =
       sanitizedCode.slice(0, block.start) +
       replacement +
@@ -85,13 +89,11 @@ function extractTableGroupBlocks(code: string): ParsedTableGroupBlock[] {
     const start = match.index;
     let cursor = match.index + match[0].length;
 
-    const nameMatch = /^([A-Za-z_][\w.]*)\s*/.exec(code.slice(cursor));
-    if (!nameMatch) continue;
+    const nameToken = readIdentifier(code, cursor);
+    if (!nameToken) continue;
 
-    const name = nameMatch[1].includes(".")
-      ? nameMatch[1].split(".").pop()!
-      : nameMatch[1];
-    cursor += nameMatch[0].length;
+    const name = splitIdentifierPath(nameToken.value).name;
+    cursor = nameToken.end;
 
     let settings = "";
     if (code[cursor] === "[") {
@@ -113,6 +115,7 @@ function extractTableGroupBlocks(code: string): ParsedTableGroupBlock[] {
       start,
       end: bodyEnd + 1,
       name,
+      rawName: nameToken.raw,
       settings,
       body,
     });
@@ -152,7 +155,12 @@ function parseMembers(body: string): NestedGroupMember[] {
     .split(/[,|\n]/)
     .map((part) => part.trim())
     .filter(Boolean)
-    .map((name) => ({ kind: "table" as const, name }));
+    .map((name) => ({ kind: "table" as const, name: normalizeIdentifierText(name) }));
+}
+
+function formatIdentifier(name: string): string {
+  if (/^[^\s{}[\](),|<>:"']+$/u.test(name)) return name;
+  return `"${name.replace(/"/gu, '\\"')}"`;
 }
 
 export function classifyMembers(

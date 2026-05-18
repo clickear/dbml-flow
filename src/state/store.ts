@@ -29,6 +29,13 @@ import {
   parser,
   setPositionsInCode,
 } from "@/lib/dbml/node-dmbl.parser";
+import {
+  buildDbmlSourceMap,
+  DbmlSourceMap,
+  DbmlSourceTarget,
+  getRangeForTarget,
+  rangeToMonacoSelection,
+} from "@/lib/dbml/source-map";
 import { formatDiagnosticsForMonaco } from "@/lib/editor/editor.helper";
 import {
   computeEdgesRelativeData,
@@ -38,6 +45,7 @@ import {
   computeRelatedGroupChanges,
   getBoundedGroups,
 } from "@/lib/flow/groups.helpers";
+import { expandNodesForFocus } from "@/lib/flow/focus.helpers";
 import { replaceNodeData } from "@/lib/flow/nodes.helpers";
 import { getLayoutedGraph } from "@/lib/layout/dagre.utils";
 import { applySavedPositions, toNodeIndex } from "@/lib/layout/layout.helpers";
@@ -46,19 +54,30 @@ import { toMapId } from "@/lib/utils";
 import { NodePositionIndex, NodeType, NodeTypes } from "@/types/nodes.types";
 import type { CompilerError, Database } from "@dbml/core";
 import { debounce } from "lodash-es";
-import { editor } from "monaco-editor";
+import { editor, type IPosition } from "monaco-editor";
 
 // Helper type for parse results
 type ParseResult =
   | { success: true; database: Database }
   | { success: false; error: unknown };
 
+export type FlowFocusRequest =
+  | { kind: "node"; nodeId: string; fieldId?: string }
+  | {
+      kind: "edge";
+      edgeId?: string;
+      sourceFieldId: string;
+      targetFieldId: string;
+    };
+
 export type AppState = {
   // Editor State
   code: string;
   database: Database | null;
   hasTextFocus: boolean;
+  editorInstance: editor.IStandaloneCodeEditor | null;
   editorModel: editor.ITextModel | null;
+  sourceMap: DbmlSourceMap;
   globalError: any;
   colorMode: ColorMode;
   savePositionsInCode: boolean;
@@ -76,6 +95,8 @@ export type AppState = {
   relationOnlyOverrides: Set<string>;
   centeredLayout: boolean;
   isExporting: boolean;
+  highlightedFieldId: string | null;
+  pendingFlowFocus: FlowFocusRequest | null;
 
   //initialisation
   initState: () => void;
@@ -83,7 +104,13 @@ export type AppState = {
   // Editor Actions
   setCode: (code: string) => void;
   setEditorTextFocus: (focus: boolean) => void;
+  setEditor: (editor: editor.IStandaloneCodeEditor | null) => void;
   setEditorModel: (model: editor.ITextModel | null) => void;
+  jumpToSource: (target: DbmlSourceTarget) => void;
+  requestFlowFocusAtEditorPosition: (position: IPosition) => void;
+  clearPendingFlowFocus: () => void;
+  clearFieldHighlight: () => void;
+  selectFlowTarget: (request: FlowFocusRequest) => void;
   parseDBML: (code: string) => ParseResult;
   setMarkers: (markers: editor.IMarkerData[]) => void;
   setGlobalError: (error: any) => void;
@@ -131,8 +158,10 @@ const useStore = create<AppState>((set, get) => ({
   // -------- Initial State --------
   code: "",
   hasTextFocus: false,
+  editorInstance: null,
   database: null,
   editorModel: null,
+  sourceMap: buildDbmlSourceMap(""),
   globalError: null,
   colorMode: "light",
   nodes: [] as NodeType[],
@@ -148,6 +177,8 @@ const useStore = create<AppState>((set, get) => ({
   edgesRelativeData: {} as EdgesRelativeData,
   centeredLayout: false,
   isExporting: false,
+  highlightedFieldId: null,
+  pendingFlowFocus: null,
   initState: () => {
     const code = getCodeFromUrl() || StartupCode;
     set({ code, savedPositions: extractPositions(code) });
@@ -156,6 +187,7 @@ const useStore = create<AppState>((set, get) => ({
   },
 
   // -------- Editor Actions --------
+  setEditor: (editorInstance) => set({ editorInstance }),
   setEditorModel: (model) => set({ editorModel: model }),
   setColorMode: (mode) => set({ colorMode: mode }),
   setEditorTextFocus: (focus) => set({ hasTextFocus: focus }),
@@ -167,7 +199,11 @@ const useStore = create<AppState>((set, get) => ({
 
   parseDBML: (code) => {
     const { clearMarkers, updateViewerFromDatabase, setMarkers } = get();
-    set({ globalError: null, savedPositions: extractPositions(code) });
+    set({
+      globalError: null,
+      savedPositions: extractPositions(code),
+      sourceMap: buildDbmlSourceMap(code),
+    });
     try {
       const nestedGroups = preprocessNestedTableGroups(code);
       const newDB = parser.parse(nestedGroups.sanitizedCode, "dbmlv2");
@@ -245,6 +281,119 @@ const useStore = create<AppState>((set, get) => ({
     if (editorModel) {
       editor.setModelMarkers(editorModel, "owner", []);
     }
+  },
+
+  jumpToSource: (target) => {
+    const { editorInstance, sourceMap } = get();
+    if (!editorInstance) return;
+    const range = getRangeForTarget(sourceMap, target);
+    if (!range) return;
+
+    editorInstance.focus();
+    editorInstance.revealRangeInCenter(range);
+    editorInstance.setSelection(rangeToMonacoSelection(range));
+    if (target.kind === "field") {
+      set({ highlightedFieldId: target.id });
+    }
+  },
+
+  requestFlowFocusAtEditorPosition: (position) => {
+    const { sourceMap, edges } = get();
+    const target = sourceMap.findTargetAtPosition(position);
+    if (!target) return;
+
+    if (target.kind === "table" || target.kind === "group") {
+      set({
+        pendingFlowFocus: { kind: "node", nodeId: target.id },
+        highlightedFieldId: null,
+      });
+      return;
+    }
+
+    if (target.kind === "field") {
+      set({
+        pendingFlowFocus: {
+          kind: "node",
+          nodeId: target.tableId,
+          fieldId: target.id,
+        },
+        highlightedFieldId: target.id,
+      });
+      return;
+    }
+
+    const edge = edges.find(
+      (edge) =>
+        edge.data?.sourcefieldId === target.sourceFieldId &&
+        edge.data?.targetfieldId === target.targetFieldId,
+    );
+    set({
+      pendingFlowFocus: {
+        kind: "edge",
+        edgeId: edge?.id,
+        sourceFieldId: target.sourceFieldId,
+        targetFieldId: target.targetFieldId,
+      },
+      highlightedFieldId: null,
+    });
+  },
+
+  clearPendingFlowFocus: () => set({ pendingFlowFocus: null }),
+  clearFieldHighlight: () => set({ highlightedFieldId: null }),
+  selectFlowTarget: (request) => {
+    if (request.kind === "node") {
+      const expanded = expandNodesForFocus(
+        get().nodes,
+        get().foldedIds,
+        request.nodeId,
+      );
+      const tableNodes = expanded.nodes.filter((n) => n.type === NodeTypes.Table);
+      const groupNodes = expanded.nodes.filter(
+        (n) => n.type === NodeTypes.TableGroup,
+      );
+      const boundedGroupNodes = getBoundedGroups(
+        groupNodes,
+        toMapId([...groupNodes, ...tableNodes]),
+      );
+      const groupParentById = buildGroupParentIndex(boundedGroupNodes);
+      const database = get().database;
+      const edges = database
+        ? mapDatabaseToEdges(database, expanded.foldedIds, groupParentById)
+        : get().edges;
+      set({
+        foldedIds: expanded.foldedIds,
+        nodes: [...boundedGroupNodes, ...tableNodes].map((node) => ({
+          ...node,
+          selected: node.id === request.nodeId,
+        })),
+        edges: edges.map((edge) => ({
+          ...edge,
+          selected: false,
+          animated: false,
+        })),
+        highlightedFieldId: request.fieldId ?? null,
+      });
+      return;
+    }
+
+    set({
+      nodes: get().nodes.map((node) => ({
+        ...node,
+        selected: false,
+      })),
+      edges: get().edges.map((edge) => {
+        const selected =
+          edge.id === request.edgeId ||
+          (edge.data?.sourcefieldId === request.sourceFieldId &&
+            edge.data?.targetfieldId === request.targetFieldId);
+        return {
+          ...edge,
+          selected,
+          animated: selected,
+        };
+      }),
+      highlightedFieldId: null,
+    });
   },
 
   // -------- Flow Actions --------

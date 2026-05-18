@@ -1,6 +1,7 @@
 import { hasFieldDetails, isUniqueFieldOrPK } from "@/lib/dbml/dbml.utils";
 import { getFieldId } from "@/lib/dbml/node-dmbl.parser";
 import { cn } from "@/lib/utils";
+import useStore from "@/state/store";
 import type { Field, Table } from "@dbml/core";
 import { KeyRound, StickyNote } from "lucide-react";
 import { LabeledHandle } from "./labeled-handle";
@@ -23,6 +24,9 @@ export const TableField = ({
 }: TableFieldProps) => {
   const { unique, pk } = isUniqueFieldOrPK(field);
   const icons = getFieldIcons(field);
+  const fieldId = getFieldId(field)!;
+  const highlightedFieldId = useStore((s) => s.highlightedFieldId);
+  const jumpToSource = useStore((s) => s.jumpToSource);
 
   const hidden = isRelationOnly && !field.endpoints.some((e) => e.ref);
 
@@ -30,9 +34,23 @@ export const TableField = ({
     <TableRow
       {...props}
       hidden={hidden}
-      className="relative text-sm whitespace-nowrap"
+      onDoubleClick={(event) => {
+        event.stopPropagation();
+        jumpToSource({
+          kind: "field",
+          id: fieldId,
+          tableId: `t-${field.table.schema.name}.${field.table.name}`,
+        });
+        props.onDoubleClick?.(event);
+      }}
+      className={cn(
+        "relative text-sm whitespace-nowrap",
+        highlightedFieldId === fieldId && "bg-primary/15 outline outline-1 outline-primary/40",
+        props.className,
+      )}
       style={{
         height: FIELD_HEIGHT,
+        ...props.style,
       }}
     >
       <TableCell
@@ -45,7 +63,7 @@ export const TableField = ({
         }}
       >
         <LabeledHandle
-          id={getFieldId(field)}
+          id={fieldId}
           title={field.name}
           type="target"
           position={Position.Left}
@@ -59,7 +77,7 @@ export const TableField = ({
 
       <TableCell className="py-0.5 px-0 text-right font-light">
         <LabeledHandle
-          id={getFieldId(field)}
+          id={fieldId}
           title={field.type.type_name}
           type="source"
           position={Position.Right}

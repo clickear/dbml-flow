@@ -27,6 +27,7 @@ function TableEdge({
   markerStart,
   markerEnd,
   animated,
+  selected,
   data,
   ...props
 }: EdgeProps) {
@@ -57,16 +58,39 @@ function TableEdge({
   }
 
   return (
-    <BaseEdge
-      path={edgePath}
-      id={id}
-      strokeWidth={5}
-      style={style}
-      markerStart={markerStart}
-      markerEnd={markerEnd}
-      //cause error React does not recognize the `pathOptions` prop etc...
-      // {...props}
-    >
+    <>
+      <BaseEdge
+        path={edgePath}
+        id={id}
+        strokeWidth={selected ? 7 : 5}
+        style={{
+          ...style,
+          stroke: selected ? "var(--color-primary)" : style?.stroke,
+        }}
+        markerStart={markerStart}
+        markerEnd={markerEnd}
+        //cause error React does not recognize the `pathOptions` prop etc...
+        // {...props}
+      />
+      <path
+        d={edgePath}
+        fill="none"
+        stroke="transparent"
+        strokeWidth={24}
+        className="react-flow__edge-interaction"
+        onDoubleClick={(event) => {
+          event.stopPropagation();
+          const tableEdgeData = data as TableEdgeData | undefined;
+          if (!tableEdgeData?.sourcefieldId || !tableEdgeData?.targetfieldId) {
+            return;
+          }
+          useStore.getState().jumpToSource({
+            kind: "edge",
+            sourceFieldId: tableEdgeData.sourcefieldId,
+            targetFieldId: tableEdgeData.targetfieldId,
+          });
+        }}
+      />
       <EdgeLabels
         showRefName={!!animated || isExporting}
         displaySource={true}
@@ -81,7 +105,7 @@ function TableEdge({
         sourcePos={sourcePos}
         targetPos={targetPos}
       />
-    </BaseEdge>
+    </>
   );
 }
 

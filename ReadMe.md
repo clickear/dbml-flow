@@ -20,9 +20,9 @@
 
 ## Editor 
 - [x] Color picker
-- [ ] Focus on double click node/fields
-- [ ] Focus on double click edge ?
-- [ ] Focus on double click group
+- [x] Focus on double click node/fields
+- [x] Focus on double click edge
+- [x] Focus on double click group
 
 ## Misc
 - [ ] Generate svg, png
@@ -35,6 +35,13 @@
 - [ ] Function getTextWidth() returns wrong value on startup (8 instead of 7)
 - [x] Scroll bar missing on editor
 - [ ] Could group size and bounds be calculated inside component instead of state store ?
+
+# Changelog
+
+## 2026-05-18
+- Added bidirectional double-click navigation between the DBML editor and canvas for tables, fields, TableGroups, and refs.
+- Added Unicode, quoted identifier, table alias, TableGroup, nested group, and commented ref support for navigation source mapping.
+- Kept editor-to-canvas navigation pan-only at the current zoom, auto-expanding folded tables/groups when focusing targets.
 
 # Sources 
 

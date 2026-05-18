@@ -12,20 +12,32 @@ const DBMLEditor: React.FC<{ className?: string }> = ({ className }) => {
     code,
     globalError,
     setCode,
+    setEditor,
     setEditorModel,
     parseDBML,
     setEditorTextFocus,
+    requestFlowFocusAtEditorPosition,
   } = useStore();
 
   // Editor mount handler
   const handleEditorMount: OnMount = useCallback(
     (editor, monaco) => {
       setEditorModel(editor.getModel());
+      setEditor(editor);
       initDbmlFetaures(editor, monaco);
       editor.onDidFocusEditorText(() => setEditorTextFocus(true));
       editor.onDidBlurEditorText(() => setEditorTextFocus(false));
+      editor.onMouseDown((event) => {
+        if (event.event.detail !== 2 || !event.target.position) return;
+        requestFlowFocusAtEditorPosition(event.target.position);
+      });
     },
-    [setEditorModel, setEditorTextFocus],
+    [
+      requestFlowFocusAtEditorPosition,
+      setEditor,
+      setEditorModel,
+      setEditorTextFocus,
+    ],
   );
 
   // Code change handler with debounce

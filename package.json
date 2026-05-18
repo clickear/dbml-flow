@@ -5,6 +5,9 @@
   "scripts": {
     "dev": "vite --host",
     "build": "tsc && vite build",
+    "test:source-map": "esbuild src/lib/dbml/source-map.test.ts --bundle --platform=node --format=esm --outfile=/tmp/dbml-flow-source-map.test.mjs && node --test /tmp/dbml-flow-source-map.test.mjs",
+    "test:viewer": "esbuild src/components/viewer/viewer.helper.test.ts --bundle --platform=node --format=esm --outfile=/tmp/dbml-flow-viewer-helper.test.mjs && node --test /tmp/dbml-flow-viewer-helper.test.mjs",
+    "test:flow": "esbuild src/lib/flow/focus.helpers.test.ts --bundle --platform=node --format=esm --outfile=/tmp/dbml-flow-focus-helper.test.mjs && node --test /tmp/dbml-flow-focus-helper.test.mjs",
     "preview": "vite preview",
     "predeploy": "tsc && vite build ",
     "deploy": "gh-pages -d dist"

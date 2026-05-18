@@ -1,10 +1,14 @@
 import React, { useEffect } from "react";
 
-import useStore, { AppState } from "@/state/store";
-import { useShallow } from "zustand/react/shallow";
+import useStore from "@/state/store";
 
 import { TableNode } from "@/components/table-node";
-import { NodeType, NodeTypes, TableEdgeTypeName } from "@/types/nodes.types";
+import {
+  NodeType,
+  NodeTypes,
+  TableEdgeType,
+  TableEdgeTypeName,
+} from "@/types/nodes.types";
 import {
   Background,
   ConnectionMode,
@@ -25,7 +29,13 @@ import DevTools from "../devTools/dev-tools";
 import ERMarkers from "../edges/markers";
 import TableEdge from "../edges/table-edge";
 import { TableGroupNode } from "../table-group-node";
-import { getNodeClass, getNodeColor } from "./viewer.helper";
+import {
+  getNodeCenter,
+  getNodeClass,
+  getNodeColor,
+  getNodesCenter,
+  getPanOnlyCenterOptions,
+} from "./viewer.helper";
 
 const nodeTypes = {
   [NodeTypes.Table]: TableNode,
@@ -54,8 +64,11 @@ function ERViewer({ className, ...props }: FlowProps) {
     onNodeMouseEnter,
     onNodeMouseLeave,
     hasTextFocus,
+    pendingFlowFocus,
+    clearPendingFlowFocus,
+    selectFlowTarget,
   } = useStore();
-  const { fitView } = useReactFlow();
+  const { fitView, getNode, getZoom, setCenter } = useReactFlow();
   const initialized = useNodesInitialized();
 
   useOnSelectionChange({ onChange });
@@ -69,6 +82,44 @@ function ERViewer({ className, ...props }: FlowProps) {
       }, 0);
     }
   }, [initialized, firstRender, setfirstRender]);
+
+  useEffect(() => {
+    if (!pendingFlowFocus) return;
+    selectFlowTarget(pendingFlowFocus);
+    const centerOptions = getPanOnlyCenterOptions(getZoom());
+
+    if (pendingFlowFocus.kind === "node") {
+      const node = getNode(pendingFlowFocus.nodeId);
+      if (node) {
+        const center = getNodeCenter(node);
+        setCenter(center.x, center.y, centerOptions);
+      }
+    } else {
+      const edge = edges.find(
+        (edge) =>
+          edge.id === pendingFlowFocus.edgeId ||
+          (edge.data?.sourcefieldId === pendingFlowFocus.sourceFieldId &&
+            edge.data?.targetfieldId === pendingFlowFocus.targetFieldId),
+      );
+      if (edge) {
+        const source = getNode(edge.source);
+        const target = getNode(edge.target);
+        const center = source && target ? getNodesCenter([source, target]) : null;
+        if (center) setCenter(center.x, center.y, centerOptions);
+      }
+    }
+
+    clearPendingFlowFocus();
+  }, [
+    clearPendingFlowFocus,
+    edges,
+    fitView,
+    getNode,
+    getZoom,
+    pendingFlowFocus,
+    selectFlowTarget,
+    setCenter,
+  ]);
 
   const map = minimap ? (
     <MiniMap nodeColor={getNodeColor} nodeClassName={getNodeClass} />
@@ -85,6 +136,21 @@ function ERViewer({ className, ...props }: FlowProps) {
       onEdgesChange={onEdgesChange}
       onNodeMouseEnter={(_, node) => onNodeMouseEnter(node)}
       onNodeMouseLeave={(_, node) => onNodeMouseLeave(node)}
+      onNodeDoubleClick={(_, node) => {
+        useStore.getState().jumpToSource({
+          kind: node.type === NodeTypes.TableGroup ? "group" : "table",
+          id: node.id,
+        });
+      }}
+      onEdgeDoubleClick={(_, edge) => {
+        const data = (edge as TableEdgeType).data;
+        if (!data?.sourcefieldId || !data?.targetfieldId) return;
+        useStore.getState().jumpToSource({
+          kind: "edge",
+          sourceFieldId: data.sourcefieldId,
+          targetFieldId: data.targetfieldId,
+        });
+      }}
       onConnect={onConnect}
       fitView
       minZoom={minZoomLevel}
