@@ -86,21 +86,25 @@ function Header({
   );
 }
 
-export const TableNode = ({ selected, data, id }: NodeProps<TableNodeType>) => {
+type TableNodeBodyProps = NodeProps<TableNodeType> & {
+  hidden: boolean;
+};
+
+function TableNodeBody({
+  selected,
+  data,
+  id,
+  hidden,
+}: TableNodeBodyProps) {
   const { relationOnly, overrideRelationOnly, relationOnlyOverrides } =
     useStore();
   const updateNodeInternals = useUpdateNodeInternals();
-
-  const groupNode = data.groupId
-    ? (useInternalNode(data.groupId) as InternalGroupNode)
-    : null;
-  const hidden = groupNode?.data.folded ?? false;
   const isRelationOnly = relationOnly && !relationOnlyOverrides.has(id);
 
   const relationOnlyCallback = useCallback(() => {
     overrideRelationOnly(id, isRelationOnly);
     updateNodeInternals(id);
-  }, [id, isRelationOnly, overrideRelationOnly]);
+  }, [id, isRelationOnly, overrideRelationOnly, updateNodeInternals]);
 
   return (
     <TableTooltipAnchor>
@@ -144,4 +148,20 @@ export const TableNode = ({ selected, data, id }: NodeProps<TableNodeType>) => {
       </BaseNode>
     </TableTooltipAnchor>
   );
+}
+
+function TableNodeInGroup({
+  groupId,
+  ...props
+}: NodeProps<TableNodeType> & { groupId: string }) {
+  const groupNode = useInternalNode(groupId) as InternalGroupNode;
+  const hidden = groupNode?.data.folded ?? false;
+  return <TableNodeBody {...props} hidden={hidden} />;
+}
+
+export const TableNode = (props: NodeProps<TableNodeType>) => {
+  if (props.data.groupId) {
+    return <TableNodeInGroup {...props} groupId={props.data.groupId} />;
+  }
+  return <TableNodeBody {...props} hidden={false} />;
 };
