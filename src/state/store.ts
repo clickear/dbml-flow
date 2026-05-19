@@ -48,8 +48,12 @@ import {
 } from "@/lib/flow/groups.helpers";
 import { expandNodesForFocus } from "@/lib/flow/focus.helpers";
 import { replaceNodeData } from "@/lib/flow/nodes.helpers";
-import { getLayoutedGraph } from "@/lib/layout/dagre.utils";
+import { layoutGraph } from "@/lib/layout/layout.orchestrator";
 import { applySavedPositions, toNodeIndex } from "@/lib/layout/layout.helpers";
+import {
+  DEFAULT_LAYOUT_MODE,
+  type LayoutMode,
+} from "@/lib/layout/layout.types";
 import { getCodeFromUrl, setCodeInUrl } from "@/lib/url.helpers";
 import { toMapId } from "@/lib/utils";
 import {
@@ -63,7 +67,12 @@ import {
   collectHiddenNodeIds,
   toggleStructureHiddenRoot,
 } from "@/lib/views/structure-tree";
-import { NodePositionIndex, NodeType, NodeTypes } from "@/types/nodes.types";
+import {
+  NodePositionIndex,
+  NodeType,
+  NodeTypes,
+  TableEdgeType,
+} from "@/types/nodes.types";
 import type { CompilerError, Database } from "@dbml/core";
 import { debounce } from "lodash-es";
 import { editor, type IPosition } from "monaco-editor";
@@ -106,6 +115,7 @@ export type AppState = {
   relationOnly: boolean;
   relationOnlyOverrides: Set<string>;
   centeredLayout: boolean;
+  layoutMode: LayoutMode;
   isExporting: boolean;
   highlightedFieldId: string | null;
   pendingFlowFocus: FlowFocusRequest | null;
@@ -152,7 +162,8 @@ export type AppState = {
   overrideRelationOnly: (nodeId: string, value: boolean) => void;
 
   setSavedPositions: (nodes: Node[]) => void;
-  onLayout: (direction: string, fitView: FitView) => void;
+  setLayoutMode: (mode: LayoutMode) => void;
+  onLayout: (fitView: FitView) => void;
   withExportRendering: <T>(fn: () => Promise<T>) => Promise<T>;
   loadSavedViews: () => void;
   setViewDrawerOpen: (open: boolean) => void;
@@ -163,6 +174,7 @@ export type AppState = {
 };
 
 const debounceTime = 600;
+let layoutRequestSeq = 0;
 const setCodeInUrlDebounced = debounce(setCodeInUrl, debounceTime);
 const setPositionsInCodeDebounced = debounce(
   (
@@ -229,6 +241,7 @@ const useStore = create<AppState>((set, get) => ({
   firstRender: true,
   edgesRelativeData: {} as EdgesRelativeData,
   centeredLayout: false,
+  layoutMode: DEFAULT_LAYOUT_MODE,
   isExporting: false,
   highlightedFieldId: null,
   pendingFlowFocus: null,
@@ -292,49 +305,73 @@ const useStore = create<AppState>((set, get) => ({
   updateViewerFromDatabase: (database: Database, nestedGroups) => {
     if (!database) return;
 
-    const { savedPositions: initialSavedPositions, setSavedPositions, centeredLayout } = get();
+    const requestId = ++layoutRequestSeq;
+    const {
+      savedPositions: initialSavedPositions,
+      setSavedPositions,
+      layoutMode,
+    } = get();
 
     const oldTableNode = get().nodes.filter((n) => n.type === NodeTypes.Table);
     const oldGroupNodes = get().nodes.filter(
       (n) => n.type === NodeTypes.TableGroup,
     );
 
-    let { tableNodes, groupNodes } = parseDatabaseToGraph(database, nestedGroups);
-    const groupParentById = buildGroupParentIndex(groupNodes);
-    const edges = mapDatabaseToEdges(
-      database,
-      get().foldedIds,
-      groupParentById,
-    );
-    const savedPositions = initialSavedPositions;
+    const run = async () => {
+      let { tableNodes, groupNodes } = parseDatabaseToGraph(
+        database,
+        nestedGroups,
+      );
+      const groupParentById = buildGroupParentIndex(groupNodes);
+      const edges = mapDatabaseToEdges(
+        database,
+        get().foldedIds,
+        groupParentById,
+      );
+      const savedPositions = initialSavedPositions;
 
-    if (
-      oldTableNode.length !== tableNodes.length ||
-      oldGroupNodes.length !== groupNodes.length
-    ) {
-      tableNodes = getLayoutedGraph(tableNodes, groupNodes, edges, centeredLayout);
-    }
+      const shouldRunLayout =
+        oldTableNode.length !== tableNodes.length ||
+        oldGroupNodes.length !== groupNodes.length ||
+        Object.keys(savedPositions).length === 0;
 
-    tableNodes = applySavedPositions(tableNodes, savedPositions);
+      if (shouldRunLayout) {
+        const layout = await layoutGraph({
+          tableNodes,
+          groupNodes,
+          edges,
+          savedPositions,
+          mode: layoutMode,
+          reason: "database-update",
+        });
+        tableNodes = layout.tableNodes;
+      } else {
+        tableNodes = applySavedPositions(tableNodes, savedPositions);
+      }
 
-    const nodesById = toMapId([...groupNodes, ...tableNodes]) as Map<
-      string,
-      NodeType
-    >;
-    groupNodes = getBoundedGroups(groupNodes, nodesById);
-    const finalNodes = [...groupNodes, ...tableNodes];
-    const existingNodeIds = new Set(finalNodes.map((node) => node.id));
-    const hiddenRootNodeIds = new Set(
-      [...get().hiddenRootNodeIds].filter((id) => existingNodeIds.has(id)),
-    );
+      if (requestId !== layoutRequestSeq) return;
 
-    set({
-      nodes: finalNodes,
-      edges,
-      hiddenRootNodeIds,
-      hiddenNodeIds: collectHiddenNodeIds(finalNodes, hiddenRootNodeIds),
-    });
-    setSavedPositions(tableNodes);
+      const nodesById = toMapId([...groupNodes, ...tableNodes]) as Map<
+        string,
+        NodeType
+      >;
+      groupNodes = getBoundedGroups(groupNodes, nodesById);
+      const finalNodes = [...groupNodes, ...tableNodes];
+      const existingNodeIds = new Set(finalNodes.map((node) => node.id));
+      const hiddenRootNodeIds = new Set(
+        [...get().hiddenRootNodeIds].filter((id) => existingNodeIds.has(id)),
+      );
+
+      set({
+        nodes: finalNodes,
+        edges,
+        hiddenRootNodeIds,
+        hiddenNodeIds: collectHiddenNodeIds(finalNodes, hiddenRootNodeIds),
+      });
+      setSavedPositions(tableNodes);
+    };
+
+    void run();
   },
 
   // Editor markers management
@@ -722,6 +759,7 @@ const useStore = create<AppState>((set, get) => ({
   },
 
   // Layout management
+  setLayoutMode: (layoutMode) => set({ layoutMode }),
   setSavedPositions: (nodes) => {
     const savedPositions = toNodeIndex(nodes);
     const { code, database, savePositionsInCode, setCode, hasTextFocus } =
@@ -731,24 +769,38 @@ const useStore = create<AppState>((set, get) => ({
       setPositionsInCodeDebounced(code, savedPositions, setCode);
     }
   },
-  onLayout: (direction, fitView) => {
-    const { nodes, edges, centeredLayout } = get();
+  onLayout: (fitView) => {
+    const requestId = ++layoutRequestSeq;
+    const { nodes, edges, layoutMode } = get();
 
     const tableNodes = nodes.filter((n) => n.type === NodeTypes.Table);
-    const groupNodes = nodes.filter((n) => n.type === NodeTypes.TableGroup);
+    let groupNodes = nodes.filter((n) => n.type === NodeTypes.TableGroup);
 
-    const newTableNodes = getLayoutedGraph(tableNodes, groupNodes, edges, centeredLayout);
+    const run = async () => {
+      const layout = await layoutGraph({
+        tableNodes,
+        groupNodes,
+        edges: edges as TableEdgeType[],
+        savedPositions: {},
+        mode: layoutMode,
+        reason: "rearrange",
+      });
+      if (requestId !== layoutRequestSeq) return;
 
-    const newGroupNodes = getBoundedGroups(
-      groupNodes,
-      toMapId([...groupNodes, ...newTableNodes]),
-    );
+      const newTableNodes = layout.tableNodes;
+      const newGroupNodes = getBoundedGroups(
+        groupNodes,
+        toMapId([...groupNodes, ...newTableNodes]),
+      );
 
-    set({
-      nodes: [...newGroupNodes, ...newTableNodes],
-    });
-    get().setSavedPositions(tableNodes);
-    setTimeout(() => fitView(), 0);
+      set({
+        nodes: [...newGroupNodes, ...newTableNodes],
+      });
+      get().setSavedPositions(newTableNodes);
+      setTimeout(() => fitView(), 0);
+    };
+
+    void run();
   },
 
   withExportRendering: async (fn) => {

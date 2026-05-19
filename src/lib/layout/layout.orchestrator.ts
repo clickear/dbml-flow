@@ -13,17 +13,12 @@ import {
   type LayoutEngines,
   type LayoutGraphInput,
   type LayoutGraphResult,
-  type LayoutMode,
 } from "./layout.types";
 
 const defaultEngines: LayoutEngines = {
   elk: layoutElkGraph,
   compact: layoutCompactGraph,
 };
-
-function shouldUseCompact(mode: LayoutMode, tableCount: number) {
-  return mode === "compact" || tableCount > LARGE_DIAGRAM_TABLE_THRESHOLD;
-}
 
 function getNodeHeight(node: TableNodeType) {
   return (
@@ -74,7 +69,10 @@ async function runBaseLayout(
     };
   }
 
-  if (shouldUseCompact(input.mode, input.tableNodes.length)) {
+  if (
+    input.mode === "compact" ||
+    input.tableNodes.length > LARGE_DIAGRAM_TABLE_THRESHOLD
+  ) {
     return {
       tableNodes: engines.compact(input.tableNodes, input.groupNodes),
       strategy: "compact" as const,

@@ -10,7 +10,7 @@ function RearrangeButton() {
   const { fitView } = useReactFlow();
 
   const handleClick = useCallback(() => {
-    onLayout("LR", fitView);
+    onLayout(fitView);
   }, [onLayout, fitView]);
 
   return (
