@@ -9,7 +9,7 @@ export type LayoutMode = "leftright" | "snowflake" | "compact";
 export type LayoutReason = "database-update" | "rearrange";
 export type LayoutStrategy = "elk" | "compact";
 
-export const DEFAULT_LAYOUT_MODE: LayoutMode = "leftright";
+export const DEFAULT_LAYOUT_MODE: LayoutMode = "compact";
 export const LARGE_DIAGRAM_TABLE_THRESHOLD = 100;
 export const ELK_NODE_PADDING = 3;
 export const COMPACT_VERTICAL_GAP = 50;
