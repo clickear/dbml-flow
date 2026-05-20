@@ -8,7 +8,7 @@ import {
   type TableNodeType,
 } from "@/types/nodes.types";
 import { layoutGraph } from "./layout.orchestrator";
-import type { LayoutEngines } from "./layout.types";
+import { DEFAULT_LAYOUT_MODE, type LayoutEngines } from "./layout.types";
 
 function table(id: string, x = 0, y = 0): TableNodeType {
   return {
@@ -45,6 +45,10 @@ function engines(overrides: Partial<LayoutEngines> = {}): LayoutEngines {
     ...overrides,
   };
 }
+
+test("defaults to compact layout mode", () => {
+  assert.equal(DEFAULT_LAYOUT_MODE, "compact");
+});
 
 test("uses ELK for normal database update without saved positions", async () => {
   const result = await layoutGraph(

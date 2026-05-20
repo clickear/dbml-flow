@@ -163,7 +163,7 @@ export type AppState = {
 
   setSavedPositions: (nodes: Node[]) => void;
   setLayoutMode: (mode: LayoutMode) => void;
-  onLayout: (fitView: FitView) => void;
+  onLayout: (fitView: FitView, mode?: LayoutMode) => void;
   withExportRendering: <T>(fn: () => Promise<T>) => Promise<T>;
   loadSavedViews: () => void;
   setViewDrawerOpen: (open: boolean) => void;
@@ -769,9 +769,10 @@ const useStore = create<AppState>((set, get) => ({
       setPositionsInCodeDebounced(code, savedPositions, setCode);
     }
   },
-  onLayout: (fitView) => {
+  onLayout: (fitView, mode) => {
     const requestId = ++layoutRequestSeq;
     const { nodes, edges, layoutMode } = get();
+    const modeToApply = mode ?? layoutMode;
 
     const tableNodes = nodes.filter((n) => n.type === NodeTypes.Table);
     let groupNodes = nodes.filter((n) => n.type === NodeTypes.TableGroup);
@@ -782,7 +783,7 @@ const useStore = create<AppState>((set, get) => ({
         groupNodes,
         edges: edges as TableEdgeType[],
         savedPositions: {},
-        mode: layoutMode,
+        mode: modeToApply,
         reason: "rearrange",
       });
       if (requestId !== layoutRequestSeq) return;

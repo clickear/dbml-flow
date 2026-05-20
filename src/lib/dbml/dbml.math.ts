@@ -19,6 +19,7 @@ const NOTE_ICON_WIDTH = 20;
 export const tableWidth = [150, 200, 250, 300].map((w) => ({
   width: w,
 }));
+const TABLE_WIDTH_STEP = 50;
 
 function getFieldRowWidth(table: Table): number {
     let max = 0;
@@ -56,7 +57,7 @@ export function findClosestSize(table: Table) {
     const contentWidth = getContentWidth(table);
     const width =
         tableWidth.find((s) => contentWidth <= s.width)?.width ??
-        tableWidth[tableWidth.length - 1].width;
+        Math.ceil(contentWidth / TABLE_WIDTH_STEP) * TABLE_WIDTH_STEP;
     return {
         width,
         height: getHeight(table),
