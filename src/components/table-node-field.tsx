@@ -6,6 +6,12 @@ import type { Field, Table } from "@dbml/core";
 import { KeyRound, StickyNote } from "lucide-react";
 import { LabeledHandle } from "./labeled-handle";
 import { ICON_SIZE, FIELD_HEIGHT, FIELD_SPACING } from "./table-constants";
+import {
+  getTableFieldContentClassName,
+  getTableFieldRowClassName,
+  isFieldConnectedToHoveredEdge,
+  isFieldRelatedToTable,
+} from "./table-node-field.helpers";
 import { TableRow, TableCell } from "./ui/table";
 import { Position } from "@xyflow/react";
 
@@ -26,9 +32,16 @@ export const TableField = ({
   const icons = getFieldIcons(field);
   const fieldId = getFieldId(field)!;
   const highlightedFieldId = useStore((s) => s.highlightedFieldId);
+  const hoveredNodeId = useStore((s) => s.hoveredNodeId);
+  const hoveredEdgeId = useStore((s) => s.hoveredEdgeId);
+  const edges = useStore((s) => s.edges);
   const jumpToSource = useStore((s) => s.jumpToSource);
 
   const hidden = isRelationOnly && !field.endpoints.some((e) => e.ref);
+  const active =
+    highlightedFieldId === fieldId ||
+    isFieldRelatedToTable(field, hoveredNodeId) ||
+    isFieldConnectedToHoveredEdge(fieldId, edges, hoveredEdgeId);
 
   return (
     <TableRow
@@ -44,8 +57,7 @@ export const TableField = ({
         props.onDoubleClick?.(event);
       }}
       className={cn(
-        "relative text-sm whitespace-nowrap",
-        highlightedFieldId === fieldId && "bg-primary/15 outline outline-1 outline-primary/40",
+        getTableFieldRowClassName(active),
         props.className,
       )}
       style={{
@@ -56,6 +68,7 @@ export const TableField = ({
       <TableCell
         className={cn(
           "py-0.5 pl-0 flex items-center gap-1",
+          getTableFieldContentClassName(active),
           unique ? "font-semibold" : "font-normal",
         )}
         style={{
@@ -68,14 +81,19 @@ export const TableField = ({
           type="target"
           position={Position.Left}
           className="bold"
-          labelClassName="p-0 pl-2"
+          labelClassName={cn("p-0 pl-2", getTableFieldContentClassName(active))}
         />
         <div className="flex justify-end gap-0.5">
           {icons}
         </div>
       </TableCell>
 
-      <TableCell className="py-0.5 px-0 text-right font-light">
+      <TableCell
+        className={cn(
+          "py-0.5 px-0 text-right font-light",
+          getTableFieldContentClassName(active),
+        )}
+      >
         <LabeledHandle
           id={fieldId}
           title={field.type.type_name}
@@ -83,7 +101,7 @@ export const TableField = ({
           position={Position.Right}
           className="p-0"
           handleClassName="p-0"
-          labelClassName="p-0 pr-2"
+          labelClassName={cn("p-0 pr-2", getTableFieldContentClassName(active))}
         />
       </TableCell>
       {children && <td>{children}</td>}

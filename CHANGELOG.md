@@ -3,10 +3,20 @@
 ## Unreleased
 
 ### Added
-- Minimap now supports dragging the visible viewport, wheel zoom, horizontal wheel panning, and `Shift + wheel` horizontal panning.
+- Table field rows now reuse the shared highlight colors for direct hover, related table hover, and ref hover.
+- Hovering a ref now highlights both endpoint fields with the same field hover treatment.
 
 ### Changed
-- Minimap horizontal wheel handling now runs from an outer capture layer because `@xyflow/react` `MiniMap` does not forward `onWheel` to its internal `svg`.
+- Field highlight matching now treats the field's own table as a valid ref target during table hover.
+- Ref endpoint schema matching now falls back to the field's own schema when DBML omits the schema name.
+
+## 2026-05-21
+
+### Recent commits
+- `09d9c16` `feat: improve minimap navigation and add changelog`
+  - Added root `CHANGELOG.md`.
+  - Enabled minimap drag, zoom, horizontal wheel panning, and `Shift + wheel` horizontal panning.
+  - Moved minimap horizontal wheel handling to an outer capture layer because `MiniMap` does not forward `onWheel` to its internal `svg`.
 
 ## 2026-05-20
 
