@@ -23,10 +23,18 @@ export type NoteAttachment =
   | { kind: "table"; targetId: string }
   | { kind: "group"; targetId: string };
 
+export type NoteDisplayMode =
+  | "expanded-floating"
+  | "folded-floating"
+  | "folded-attached-top";
+
 export type NoteNodeData = SharedNodeData & {
   note: StickyNote;
   ownerNodeId?: string;
+  detached?: boolean;
   lines: string[];
+  displayMode: NoteDisplayMode;
+  dockedWidth?: number;
 };
 
 export const NodeTypes = {

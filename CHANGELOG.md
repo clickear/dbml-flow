@@ -3,10 +3,15 @@
 ## Unreleased
 
 ### Added
+- Added attached-top sticky notes for tables and table groups, with expand/collapse transitions between owner bars and floating notes.
+- Added detached sticky-note persistence so dragging an attached folded note turns it into an independent floating note across reloads and saved views.
+- Added a DBML feature support matrix to `ReadMe.md`, comparing official syntax coverage against the current app behavior.
 - Table field rows now reuse the shared highlight colors for direct hover, related table hover, and ref hover.
 - Hovering a ref now highlights both endpoint fields with the same field hover treatment.
 
 ### Changed
+- Attached sticky notes now default to collapsed top bars above their owners instead of the previous docked fallback behavior.
+- Table-group attached note bars now cap their folded width while table-attached bars match the owner table width.
 - Field highlight matching now treats the field's own table as a valid ref target during table hover.
 - Ref endpoint schema matching now falls back to the field's own schema when DBML omits the schema name.
 

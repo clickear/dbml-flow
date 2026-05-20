@@ -1,11 +1,13 @@
-import { useMemo } from "react";
+import { type MouseEvent, useCallback, useMemo } from "react";
 
 import { BaseNode } from "@/components/base-node";
+import { HEADER_HEIGHT } from "@/components/table-constants";
 import { cn } from "@/lib/utils";
 import { isHiddenByFoldedAncestors } from "@/lib/dbml/nested-group.parser";
 import useStore from "@/state/store";
 import { NodeTypes, type NoteNodeType, type NodeType } from "@/types/nodes.types";
 import { type NodeProps } from "@xyflow/react";
+import { ChevronDown, ChevronUp } from "lucide-react";
 
 function renderLine(line: string, index: number) {
   const trimmed = line.trim();
@@ -37,7 +39,11 @@ function renderLine(line: string, index: number) {
   );
 }
 
-function isOwnerHiddenByFold(node: NodeType | undefined, nodes: NodeType[], foldedIds: Set<string>) {
+function isOwnerHiddenByFold(
+  node: NodeType | undefined,
+  nodes: NodeType[],
+  foldedIds: Set<string>,
+) {
   if (!node) {
     return false;
   }
@@ -57,36 +63,101 @@ function isOwnerHiddenByFold(node: NodeType | undefined, nodes: NodeType[], fold
   return false;
 }
 
+function NoteHeader({
+  label,
+  color,
+  isExpanded,
+  onToggle,
+  attachedTop,
+}: {
+  label: string;
+  color?: string;
+  isExpanded: boolean;
+  onToggle: (event: MouseEvent<HTMLElement>) => void;
+  attachedTop: boolean;
+}) {
+  const Icon = isExpanded ? ChevronUp : ChevronDown;
+
+  return (
+    <div
+      className={cn(
+        "flex items-center gap-1 px-2 text-xs font-medium text-zinc-900",
+        isExpanded ? "border-b border-black/10" : "",
+        attachedTop ? "rounded-t-[inherit]" : "",
+      )}
+      style={{
+        backgroundColor: color,
+        height: HEADER_HEIGHT,
+      }}
+      title={label}
+    >
+      <button
+        type="button"
+        onClick={onToggle}
+        className="cursor-pointer shrink-0"
+      >
+        <Icon size="0.8rem" />
+      </button>
+      <span className="truncate">{label}</span>
+    </div>
+  );
+}
+
 export function StickyNoteNode({ id, data, selected }: NodeProps<NoteNodeType>) {
   const nodes = useStore((state) => state.nodes);
   const foldedIds = useStore((state) => state.foldedIds);
+  const foldNode = useStore((state) => state.foldNode);
 
   const hidden = useMemo(() => {
-    if (!data.ownerNodeId) {
+    if (!data.ownerNodeId || data.detached) {
       return false;
     }
     const owner = nodes.find((node) => node.id === data.ownerNodeId);
     return isOwnerHiddenByFold(owner, nodes, foldedIds);
-  }, [data.ownerNodeId, foldedIds, nodes]);
+  }, [data.detached, data.ownerNodeId, foldedIds, nodes]);
+
+  const onToggle = useCallback(
+    (event: MouseEvent<HTMLElement>) => {
+      event.stopPropagation();
+      foldNode(id, !data.folded);
+    },
+    [data.folded, foldNode, id],
+  );
+
+  const isAttachedTop = data.displayMode === "folded-attached-top";
+  const isExpanded = data.displayMode === "expanded-floating";
 
   return (
     <BaseNode
       id={id}
       selected={selected}
       hidden={hidden}
-      className={cn("max-w-[280px] border-0 p-0 shadow-md")}
+      className={cn(
+        "border-0 p-0 shadow-md",
+        isAttachedTop ? "rounded-xs shadow-sm" : "rounded-xs",
+      )}
       style={{
-        width: data.guessedDimensions?.width ?? 280,
-        minWidth: data.guessedDimensions?.width ?? 280,
+        width: isAttachedTop
+          ? data.dockedWidth ?? 18
+          : data.guessedDimensions?.width ?? 280,
+        minWidth: isAttachedTop
+          ? data.dockedWidth ?? 18
+          : data.guessedDimensions?.width ?? 280,
         backgroundColor: data.color,
       }}
     >
-      <div className="border-b border-black/10 px-3 py-2 text-xs font-medium text-zinc-900">
-        {data.label}
-      </div>
-      <div className="space-y-1 px-3 py-3 text-zinc-900">
-        {data.lines.map(renderLine)}
-      </div>
+      <NoteHeader
+        label={data.label}
+        color={data.color}
+        isExpanded={isExpanded}
+        onToggle={onToggle}
+        attachedTop={isAttachedTop}
+      />
+      {!isAttachedTop && isExpanded && (
+        <div className="space-y-1 px-3 py-3 text-zinc-900">
+          {data.lines.map(renderLine)}
+        </div>
+      )}
     </BaseNode>
   );
 }

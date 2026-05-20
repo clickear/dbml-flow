@@ -19,6 +19,7 @@ const view: SavedCanvasView = {
     "g-public.auth": [50, 75],
     "n-public.users_note": [320, 140],
   },
+  detachedNoteIds: new Set(["n-public.users_note"]),
   foldedIds: new Set(["g-public.auth"]),
   relationOnly: true,
   relationOnlyOverrides: new Set(["t-public.users"]),
@@ -37,6 +38,7 @@ test("serializes saved view Set fields as arrays", () => {
       "g-public.auth": [50, 75],
       "n-public.users_note": [320, 140],
     },
+    detachedNoteIds: ["n-public.users_note"],
     foldedIds: ["g-public.auth"],
     relationOnly: true,
     relationOnlyOverrides: ["t-public.users"],
@@ -48,6 +50,7 @@ test("deserializes saved view arrays back into Sets", () => {
   const serialized = serializeSavedView(view);
   const result = deserializeSavedView(serialized);
 
+  assert.deepEqual(result.detachedNoteIds, new Set(["n-public.users_note"]));
   assert.deepEqual(result.foldedIds, new Set(["g-public.auth"]));
   assert.deepEqual(result.relationOnlyOverrides, new Set(["t-public.users"]));
   assert.deepEqual(result.hiddenNodeIds, new Set(["t-public.sessions"]));
@@ -63,6 +66,7 @@ test("sanitizes saved view state against current node ids", () => {
     "t-public.users": [100, 200],
     "n-public.users_note": [320, 140],
   });
+  assert.deepEqual(result.detachedNoteIds, new Set(["n-public.users_note"]));
   assert.deepEqual(result.foldedIds, new Set([]));
   assert.deepEqual(result.relationOnlyOverrides, new Set(["t-public.users"]));
   assert.deepEqual(result.hiddenNodeIds, new Set([]));

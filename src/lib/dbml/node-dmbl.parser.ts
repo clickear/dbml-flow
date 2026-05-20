@@ -131,25 +131,78 @@ function getBaseId(table: Table | TableGroup) {
 const positionStoreRegex =
   /\n?\/\*\s*<(?:posistions|positions)>(.*?)<\/(?:positions|posistions)>\s*\*\//s;
 
-export function extractPositions(code: string) {
-  const positionMatch = positionStoreRegex.exec(code);
-  if (!positionMatch) return {};
+type StoredCanvasState = {
+  positions: NodePositionIndex;
+  detachedNoteIds?: string[];
+};
 
-  return JSON.parse(positionMatch[1]) as NodePositionIndex;
+function parseStoredCanvasState(code: string): StoredCanvasState | null {
+  const positionMatch = positionStoreRegex.exec(code);
+  if (!positionMatch) return null;
+
+  const parsed = JSON.parse(positionMatch[1]) as
+    | NodePositionIndex
+    | StoredCanvasState;
+
+  if (
+    parsed &&
+    typeof parsed === "object" &&
+    "positions" in parsed &&
+    parsed.positions &&
+    typeof parsed.positions === "object"
+  ) {
+    const rawDetachedNoteIds =
+      "detachedNoteIds" in parsed && Array.isArray(parsed.detachedNoteIds)
+        ? parsed.detachedNoteIds
+        : [];
+    const detachedNoteIds = rawDetachedNoteIds.filter(
+      (value): value is string => typeof value === "string",
+    );
+    return {
+      positions: parsed.positions as NodePositionIndex,
+      detachedNoteIds,
+    };
+  }
+
+  return {
+    positions: parsed as NodePositionIndex,
+    detachedNoteIds: [],
+  };
+}
+
+export function extractPositions(code: string) {
+  return parseStoredCanvasState(code)?.positions ?? {};
+}
+
+export function extractDetachedNoteIds(code: string) {
+  return new Set(parseStoredCanvasState(code)?.detachedNoteIds ?? []);
 }
 
 export function setPositionsInCode(
   code: string,
-  savedPositions: NodePositionIndex
+  savedPositions: NodePositionIndex,
+  detachedNoteIds: Set<string> = new Set(),
 ) {
   const positionMatch = positionStoreRegex.exec(code);
   const start = positionMatch?.index ?? code.length;
   const end = start + (positionMatch?.[0].length ?? 0);
 
-  const hasValue = savedPositions && Object.keys(savedPositions).length;
+  const hasPositions = savedPositions && Object.keys(savedPositions).length;
+  const detachedNoteIdList = [...detachedNoteIds].sort((a, b) =>
+    a.localeCompare(b),
+  );
+  const hasDetachedNoteIds = detachedNoteIdList.length > 0;
+  const hasValue = hasPositions || hasDetachedNoteIds;
+  const storedValue =
+    hasDetachedNoteIds
+      ? {
+          positions: savedPositions,
+          detachedNoteIds: detachedNoteIdList,
+        }
+      : savedPositions;
   const positionsString = hasValue
     ? `${start > 0 ? "\n" : ""}/*<posistions>${JSON.stringify(
-        savedPositions
+        storedValue
       )}</positions>*/`
     : "";
 

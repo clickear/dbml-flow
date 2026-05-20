@@ -25,12 +25,18 @@ import {
   preprocessNestedTableGroups,
 } from "@/lib/dbml/nested-group.parser";
 import {
+  extractDetachedNoteIds,
   extractPositions,
   parseDatabaseToGraph,
   parser,
   setPositionsInCode,
 } from "@/lib/dbml/node-dmbl.parser";
-import { placeNotesNearOwners } from "@/lib/dbml/sticky-note.parser";
+import {
+  detachNoteFromOwner,
+  expandNoteToFloating,
+  placeNotesNearOwners,
+  setNoteDisplayMode,
+} from "@/lib/dbml/sticky-note.parser";
 import {
   buildDbmlSourceMap,
   DbmlSourceMap,
@@ -51,11 +57,16 @@ import {
 import { expandNodesForFocus } from "@/lib/flow/focus.helpers";
 import { replaceNodeData } from "@/lib/flow/nodes.helpers";
 import { layoutGraph } from "@/lib/layout/layout.orchestrator";
-import { applySavedPositions, toNodeIndex } from "@/lib/layout/layout.helpers";
+import {
+  applySavedPositions,
+  hasSavedPosition,
+  toNodeIndex,
+} from "@/lib/layout/layout.helpers";
 import {
   DEFAULT_LAYOUT_MODE,
   type LayoutMode,
 } from "@/lib/layout/layout.types";
+import { getNodesBounds, type NodeBounds } from "@/lib/math/math.helper";
 import { getCodeFromUrl, setCodeInUrl } from "@/lib/url.helpers";
 import { toMapId } from "@/lib/utils";
 import {
@@ -71,6 +82,7 @@ import {
 } from "@/lib/views/structure-tree";
 import {
   NodePositionIndex,
+  NoteNodeType,
   NodeType,
   NodeTypes,
   TableEdgeType,
@@ -111,6 +123,7 @@ export type AppState = {
   nodes: NodeType[];
   edges: Edge[];
   savedPositions: NodePositionIndex;
+  detachedNoteIds: Set<string>;
   minimap: boolean;
   edgesRelativeData: EdgesRelativeData;
   foldedIds: Set<string>;
@@ -186,9 +199,10 @@ const setPositionsInCodeDebounced = debounce(
   (
     code: string,
     savedPositions: NodePositionIndex,
+    detachedNoteIds: Set<string>,
     setCode: (code: string) => void,
   ) => {
-    const newCode = setPositionsInCode(code, savedPositions);
+    const newCode = setPositionsInCode(code, savedPositions, detachedNoteIds);
     setCode(newCode);
   },
   debounceTime,
@@ -238,6 +252,55 @@ function decorateEdges(
   });
 }
 
+const EMPTY_BOUNDS: NodeBounds = {
+  xMin: 0,
+  xMax: 0,
+  yMin: 0,
+  yMax: 0,
+  width: 0,
+  height: 0,
+};
+
+function getStructureGraphBounds(nodes: NodeType[]) {
+  const structuralNodes = nodes.filter(
+    (node) =>
+      node.type === NodeTypes.Table || node.type === NodeTypes.TableGroup,
+  );
+
+  return structuralNodes.length > 0 ? getNodesBounds(structuralNodes) : EMPTY_BOUNDS;
+}
+
+function syncNoteFoldState(
+  noteNode: NoteNodeType,
+  foldedIds: Set<string>,
+): NoteNodeType {
+  const foldedDisplayMode = noteNode.data.ownerNodeId && !noteNode.data.detached
+    ? "folded-attached-top"
+    : "folded-floating";
+
+  if (foldedIds.has(noteNode.id)) {
+    return setNoteDisplayMode(noteNode, foldedDisplayMode);
+  }
+
+  return setNoteDisplayMode(
+    noteNode,
+    noteNode.data.displayMode === foldedDisplayMode
+      ? foldedDisplayMode
+      : "expanded-floating",
+  );
+}
+
+function applyDetachedNoteState(
+  noteNode: NoteNodeType,
+  detachedNoteIds: Set<string>,
+): NoteNodeType {
+  if (!detachedNoteIds.has(noteNode.id)) {
+    return noteNode;
+  }
+
+  return detachNoteFromOwner(noteNode);
+}
+
 // this is our useStore hook that we can use in our components to get parts of the store and call actions
 const useStore = create<AppState>((set, get) => ({
   // -------- Initial State --------
@@ -252,6 +315,7 @@ const useStore = create<AppState>((set, get) => ({
   nodes: [] as NodeType[],
   edges: [] as Edge[],
   savedPositions: {},
+  detachedNoteIds: new Set<string>(),
   foldedIds: new Set<string>(),
   relationOnly: false,
   relationOnlyOverrides: new Set<string>(),
@@ -278,6 +342,7 @@ const useStore = create<AppState>((set, get) => ({
     set({
       code,
       savedPositions: extractPositions(code),
+      detachedNoteIds: extractDetachedNoteIds(code),
       savedViews,
       activeViewId: savedViews[0]?.id ?? null,
     });
@@ -301,6 +366,7 @@ const useStore = create<AppState>((set, get) => ({
     set({
       globalError: null,
       savedPositions: extractPositions(code),
+      detachedNoteIds: extractDetachedNoteIds(code),
       sourceMap: buildDbmlSourceMap(code),
     });
     try {
@@ -330,6 +396,7 @@ const useStore = create<AppState>((set, get) => ({
     const requestId = ++layoutRequestSeq;
     const {
       savedPositions: initialSavedPositions,
+      detachedNoteIds: initialDetachedNoteIds,
       setSavedPositions,
       layoutMode,
     } = get();
@@ -343,6 +410,9 @@ const useStore = create<AppState>((set, get) => ({
       let { tableNodes, groupNodes, noteNodes } = parseDatabaseToGraph(
         database,
         nestedGroups,
+      );
+      noteNodes = noteNodes.map((noteNode) =>
+        applyDetachedNoteState(noteNode, initialDetachedNoteIds),
       );
       const groupParentById = buildGroupParentIndex(groupNodes);
       const edges = mapDatabaseToEdges(
@@ -382,14 +452,27 @@ const useStore = create<AppState>((set, get) => ({
         string,
         NodeType
       >;
-      noteNodes = applySavedPositions(
-        placeNotesNearOwners(noteNodes, noteOwnersById),
-        savedPositions,
+      const lockedNoteIds = new Set(
+        noteNodes
+          .filter((noteNode) => hasSavedPosition(savedPositions, noteNode.id))
+          .map((noteNode) => noteNode.id),
       );
+      noteNodes = applySavedPositions(
+        placeNotesNearOwners(
+          noteNodes,
+          noteOwnersById,
+          getStructureGraphBounds([...groupNodes, ...tableNodes]),
+          lockedNoteIds,
+        ),
+        savedPositions,
+      ).map((noteNode) => syncNoteFoldState(noteNode, get().foldedIds));
       const finalNodes = [...groupNodes, ...tableNodes, ...noteNodes];
       const existingNodeIds = new Set(finalNodes.map((node) => node.id));
       const hiddenRootNodeIds = new Set(
         [...get().hiddenRootNodeIds].filter((id) => existingNodeIds.has(id)),
+      );
+      const detachedNoteIds = new Set(
+        [...initialDetachedNoteIds].filter((id) => existingNodeIds.has(id)),
       );
 
       set({
@@ -402,6 +485,7 @@ const useStore = create<AppState>((set, get) => ({
         ),
         hiddenRootNodeIds,
         hiddenNodeIds: collectHiddenNodeIds(finalNodes, hiddenRootNodeIds),
+        detachedNoteIds,
       });
       setSavedPositions([...tableNodes, ...noteNodes]);
     };
@@ -511,7 +595,10 @@ const useStore = create<AppState>((set, get) => ({
       const edges = database
         ? mapDatabaseToEdges(database, expanded.foldedIds, groupParentById)
         : get().edges;
-      const nextNodes = [...boundedGroupNodes, ...tableNodes, ...noteNodes].map((node) => ({
+      const syncedNoteNodes = noteNodes.map((node) =>
+        syncNoteFoldState(node, expanded.foldedIds),
+      );
+      const nextNodes = [...boundedGroupNodes, ...tableNodes, ...syncedNoteNodes].map((node) => ({
         ...node,
         selected: node.id === request.nodeId,
       })) as NodeType[];
@@ -575,13 +662,22 @@ const useStore = create<AppState>((set, get) => ({
     const positionedNodes = applySavedPositions(
       get().nodes,
       sanitized.positions,
-    ).map((node) => ({
-      ...node,
-      data: {
-        ...node.data,
-        folded: sanitized.foldedIds.has(node.id),
-      },
-    })) as NodeType[];
+    ).map((node) => {
+      if (node.type === NodeTypes.Note) {
+        return syncNoteFoldState(
+          applyDetachedNoteState(node, sanitized.detachedNoteIds),
+          sanitized.foldedIds,
+        );
+      }
+
+      return {
+        ...node,
+        data: {
+          ...node.data,
+          folded: sanitized.foldedIds.has(node.id),
+        },
+      };
+    }) as NodeType[];
     const tableNodes = positionedNodes.filter((n) => n.type === NodeTypes.Table);
     const groupNodes = positionedNodes.filter(
       (n) => n.type === NodeTypes.TableGroup,
@@ -608,6 +704,7 @@ const useStore = create<AppState>((set, get) => ({
         get().hoveredNodeId,
         get().hoveredEdgeId,
       ),
+      detachedNoteIds: sanitized.detachedNoteIds,
       foldedIds: sanitized.foldedIds,
       relationOnly: sanitized.relationOnly,
       relationOnlyOverrides: sanitized.relationOnlyOverrides,
@@ -621,6 +718,7 @@ const useStore = create<AppState>((set, get) => ({
       activeViewId,
       savedViews,
       savedPositions,
+      detachedNoteIds,
       foldedIds,
       relationOnly,
       relationOnlyOverrides,
@@ -636,6 +734,7 @@ const useStore = create<AppState>((set, get) => ({
             updatedAt: now,
             viewport,
             positions: savedPositions,
+            detachedNoteIds: new Set(detachedNoteIds),
             foldedIds: new Set(foldedIds),
             relationOnly,
             relationOnlyOverrides: new Set(relationOnlyOverrides),
@@ -650,6 +749,7 @@ const useStore = create<AppState>((set, get) => ({
     const {
       savedViews,
       savedPositions,
+      detachedNoteIds,
       foldedIds,
       relationOnly,
       relationOnlyOverrides,
@@ -663,6 +763,7 @@ const useStore = create<AppState>((set, get) => ({
       updatedAt: now,
       viewport,
       positions: savedPositions,
+      detachedNoteIds: new Set(detachedNoteIds),
       foldedIds: new Set(foldedIds),
       relationOnly,
       relationOnlyOverrides: new Set(relationOnlyOverrides),
@@ -696,6 +797,55 @@ const useStore = create<AppState>((set, get) => ({
     const newFoldedIds = new Set(foldedIds);
     if (fold) newFoldedIds.add(nodeId);
     else newFoldedIds.delete(nodeId);
+
+    if (node.type === NodeTypes.Note) {
+      const ownerNodes = nodes.filter(
+        (currentNode) =>
+          currentNode.type === NodeTypes.Table ||
+          currentNode.type === NodeTypes.TableGroup,
+      );
+      const ownersById = toMapId(ownerNodes) as Map<string, NodeType>;
+      const graphBounds = getStructureGraphBounds(nodes);
+      const nextNote = fold
+        ? (
+            placeNotesNearOwners(
+              [
+                setNoteDisplayMode(
+                  node,
+                  node.data.ownerNodeId && !node.data.detached
+                    ? "folded-attached-top"
+                    : "folded-floating",
+                ),
+              ],
+              ownersById,
+              graphBounds,
+            )[0] ?? node
+          )
+        : expandNoteToFloating(node, ownersById, graphBounds);
+      const newNodes = applyNodeChanges<NodeType>(
+        [
+          {
+            id: nodeId,
+            type: "replace",
+            item: nextNote,
+          },
+        ],
+        nodes,
+      );
+
+      set({
+        foldedIds: newFoldedIds,
+        nodes: newNodes,
+        edges: decorateEdges(
+          get().edges,
+          newNodes,
+          get().hoveredNodeId,
+          get().hoveredEdgeId,
+        ),
+      });
+      get().setSavedPositions(newNodes);
+      return;
+    }
 
     const newNodes = replaceNodeData(nodes, node, nodeId, {
       folded: fold,
@@ -775,14 +925,57 @@ const useStore = create<AppState>((set, get) => ({
     const computedChanges = computeRelatedGroupChanges(changes, oldNodesById);
 
     let newNodes = applyNodeChanges([...changes, ...computedChanges], nodes);
+    const draggedAttachedTopNoteIds = new Set(
+      changes
+        .flatMap((change) => {
+          if (change.type !== "position" || !change.dragging) {
+            return [];
+          }
+          const node = oldNodesById.get(change.id);
+          if (
+            node?.type === NodeTypes.Note &&
+            node.data.displayMode === "folded-attached-top"
+          ) {
+            return [change.id];
+          }
+          return [];
+        }),
+    );
+
+    let nextFoldedIds = get().foldedIds;
+    let nextDetachedNoteIds = get().detachedNoteIds;
+
+    if (draggedAttachedTopNoteIds.size > 0) {
+      newNodes = newNodes.map((node) => {
+        if (
+          node.type === NodeTypes.Note &&
+          draggedAttachedTopNoteIds.has(node.id)
+        ) {
+          return detachNoteFromOwner(node);
+        }
+        return node;
+      }) as NodeType[];
+
+      nextFoldedIds = new Set(get().foldedIds);
+      nextDetachedNoteIds = new Set(get().detachedNoteIds);
+      draggedAttachedTopNoteIds.forEach((id) => {
+        nextFoldedIds.add(id);
+        nextDetachedNoteIds.add(id);
+      });
+    }
 
     const edgesRelativeData = computeEdgesRelativeData(
       toMapId<string, NodeType>(newNodes),
       get().edges,
     );
 
+    set({
+      nodes: newNodes,
+      edgesRelativeData,
+      foldedIds: nextFoldedIds,
+      detachedNoteIds: nextDetachedNoteIds,
+    });
     get().setSavedPositions(newNodes);
-    set({ nodes: newNodes, edgesRelativeData });
   },
 
   onEdgesChange: (changes: EdgeChange[]) => {
@@ -882,11 +1075,18 @@ const useStore = create<AppState>((set, get) => ({
   setLayoutMode: (layoutMode) => set({ layoutMode }),
   setSavedPositions: (nodes) => {
     const savedPositions = toNodeIndex(nodes);
-    const { code, database, savePositionsInCode, setCode, hasTextFocus } =
+    const {
+      code,
+      database,
+      savePositionsInCode,
+      setCode,
+      hasTextFocus,
+      detachedNoteIds,
+    } =
       get();
     set({ savedPositions });
     if (!hasTextFocus && savePositionsInCode && database) {
-      setPositionsInCodeDebounced(code, savedPositions, setCode);
+      setPositionsInCodeDebounced(code, savedPositions, detachedNoteIds, setCode);
     }
   },
   onLayout: (fitView, mode) => {

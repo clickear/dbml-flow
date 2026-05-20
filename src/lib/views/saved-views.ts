@@ -9,6 +9,7 @@ export type SavedCanvasView = {
   updatedAt: number;
   viewport: Viewport;
   positions: NodePositionIndex;
+  detachedNoteIds: Set<string>;
   foldedIds: Set<string>;
   relationOnly: boolean;
   relationOnlyOverrides: Set<string>;
@@ -19,8 +20,9 @@ export const SAVED_VIEWS_STORAGE_KEY = "dbml-flow.views.v1";
 
 export type SerializedSavedCanvasView = Omit<
   SavedCanvasView,
-  "foldedIds" | "relationOnlyOverrides" | "hiddenNodeIds"
+  "detachedNoteIds" | "foldedIds" | "relationOnlyOverrides" | "hiddenNodeIds"
 > & {
+  detachedNoteIds: string[];
   foldedIds: string[];
   relationOnlyOverrides: string[];
   hiddenNodeIds: string[];
@@ -35,6 +37,7 @@ export function serializeSavedView(
 ): SerializedSavedCanvasView {
   return {
     ...view,
+    detachedNoteIds: sortStrings(view.detachedNoteIds),
     foldedIds: sortStrings(view.foldedIds),
     relationOnlyOverrides: sortStrings(view.relationOnlyOverrides),
     hiddenNodeIds: sortStrings(view.hiddenNodeIds),
@@ -50,6 +53,7 @@ export function deserializeSavedView(value: unknown): SavedCanvasView {
     updatedAt: Number(raw.updatedAt ?? Date.now()),
     viewport: raw.viewport ?? { x: 0, y: 0, zoom: 1 },
     positions: raw.positions ?? {},
+    detachedNoteIds: new Set(raw.detachedNoteIds ?? []),
     foldedIds: new Set(raw.foldedIds ?? []),
     relationOnly: Boolean(raw.relationOnly),
     relationOnlyOverrides: new Set(raw.relationOnlyOverrides ?? []),
@@ -71,6 +75,7 @@ export function sanitizeSavedView(
   return {
     ...view,
     positions,
+    detachedNoteIds: keepCurrent(view.detachedNoteIds),
     foldedIds: keepCurrent(view.foldedIds),
     relationOnlyOverrides: keepCurrent(view.relationOnlyOverrides),
     hiddenNodeIds: keepCurrent(view.hiddenNodeIds),
