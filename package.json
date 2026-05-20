@@ -7,6 +7,7 @@
     "build": "tsc && vite build",
     "test:saved-views": "esbuild src/lib/views/saved-views.test.ts --bundle --platform=node --format=esm --outfile=/tmp/dbml-flow-saved-views.test.mjs && node --test /tmp/dbml-flow-saved-views.test.mjs",
     "test:source-map": "esbuild src/lib/dbml/source-map.test.ts --bundle --platform=node --format=esm --outfile=/tmp/dbml-flow-source-map.test.mjs && node --test /tmp/dbml-flow-source-map.test.mjs",
+    "test:sticky-notes": "esbuild src/lib/dbml/sticky-note.parser.test.ts --bundle --platform=node --format=esm --outfile=/tmp/dbml-flow-sticky-note.test.mjs && node --test /tmp/dbml-flow-sticky-note.test.mjs",
     "test:structure-tree": "esbuild src/lib/views/structure-tree.test.ts --bundle --platform=node --format=esm --outfile=/tmp/dbml-flow-structure-tree.test.mjs && node --test /tmp/dbml-flow-structure-tree.test.mjs",
     "test:viewer": "esbuild src/components/viewer/viewer.helper.test.ts --bundle --platform=node --format=esm --outfile=/tmp/dbml-flow-viewer-helper.test.mjs && node --test /tmp/dbml-flow-viewer-helper.test.mjs",
     "test:fields": "esbuild src/components/table-node-field.helpers.test.ts --bundle --platform=node --format=esm --outfile=/tmp/dbml-flow-table-field.test.mjs && node --test /tmp/dbml-flow-table-field.test.mjs",

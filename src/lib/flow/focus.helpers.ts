@@ -16,7 +16,9 @@ export function expandNodesForFocus(
     currentId =
       node.type === NodeTypes.TableGroup
         ? node.data.parentGroupId
-        : node.data.groupId;
+        : node.type === NodeTypes.Table
+          ? node.data.groupId
+          : undefined;
   }
 
   const nextFoldedIds = new Set(foldedIds);

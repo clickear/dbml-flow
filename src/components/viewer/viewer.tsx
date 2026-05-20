@@ -3,6 +3,7 @@ import React, { useEffect } from "react";
 import useStore from "@/state/store";
 
 import { TableNode } from "@/components/table-node";
+import { StickyNoteNode } from "@/components/sticky-note-node";
 import {
   NodeType,
   NodeTypes,
@@ -46,6 +47,7 @@ import { ViewDrawer } from "./view-drawer";
 const nodeTypes = {
   [NodeTypes.Table]: TableNode,
   [NodeTypes.TableGroup]: TableGroupNode,
+  [NodeTypes.Note]: StickyNoteNode,
 };
 
 const edgeTypes = {
@@ -169,7 +171,12 @@ function ERViewer({ className, ...props }: FlowProps) {
       onNodeMouseLeave={(_, node) => onNodeMouseLeave(node)}
       onNodeDoubleClick={(_, node) => {
         useStore.getState().jumpToSource({
-          kind: node.type === NodeTypes.TableGroup ? "group" : "table",
+          kind:
+            node.type === NodeTypes.TableGroup
+              ? "group"
+              : node.type === NodeTypes.Note
+                ? "note"
+                : "table",
           id: node.id,
         });
       }}

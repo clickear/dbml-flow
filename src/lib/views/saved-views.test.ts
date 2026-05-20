@@ -17,6 +17,7 @@ const view: SavedCanvasView = {
   positions: {
     "t-public.users": [100, 200],
     "g-public.auth": [50, 75],
+    "n-public.users_note": [320, 140],
   },
   foldedIds: new Set(["g-public.auth"]),
   relationOnly: true,
@@ -34,6 +35,7 @@ test("serializes saved view Set fields as arrays", () => {
     positions: {
       "t-public.users": [100, 200],
       "g-public.auth": [50, 75],
+      "n-public.users_note": [320, 140],
     },
     foldedIds: ["g-public.auth"],
     relationOnly: true,
@@ -52,10 +54,14 @@ test("deserializes saved view arrays back into Sets", () => {
 });
 
 test("sanitizes saved view state against current node ids", () => {
-  const result = sanitizeSavedView(view, new Set(["t-public.users"]));
+  const result = sanitizeSavedView(
+    view,
+    new Set(["t-public.users", "n-public.users_note"]),
+  );
 
   assert.deepEqual(result.positions, {
     "t-public.users": [100, 200],
+    "n-public.users_note": [320, 140],
   });
   assert.deepEqual(result.foldedIds, new Set([]));
   assert.deepEqual(result.relationOnlyOverrides, new Set(["t-public.users"]));

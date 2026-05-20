@@ -207,3 +207,22 @@ test("resolves double-clicks anywhere on field declaration lines to the field", 
   assert.deepEqual(sourceMap.findTargetAtPosition({ lineNumber: 2, column: 10 }), target);
   assert.deepEqual(sourceMap.findTargetAtPosition({ lineNumber: 2, column: 16 }), target);
 });
+
+test("maps note declarations and resolves editor clicks to note targets", () => {
+  const code = `Note note_orders {\n  '@attach table:ecommerce.orders\\n# Orders summary'\n}\n`;
+  const sourceMap = buildDbmlSourceMap(code);
+
+  assert.deepEqual(sourceMap.findTargetAtPosition({ lineNumber: 1, column: 7 }), {
+    kind: "note",
+    id: "n-public.note_orders",
+  });
+  assert.deepEqual(
+    getRangeForTarget(sourceMap, { kind: "note", id: "n-public.note_orders" }),
+    {
+      startLineNumber: 1,
+      startColumn: 6,
+      endLineNumber: 1,
+      endColumn: 17,
+    },
+  );
+});

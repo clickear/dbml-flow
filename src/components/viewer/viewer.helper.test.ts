@@ -1,10 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { NodeTypes, type NodeType } from "@/types/nodes.types";
+
 import {
   getMiniMapHorizontalWheelViewport,
   getMiniMapInteractionProps,
   getNodeCenter,
+  getNodeColor,
   getNodesCenter,
   getPanOnlyCenterOptions,
 } from "./viewer.helper";
@@ -82,5 +85,25 @@ test("ignores vertical minimap wheel movement so zoom can handle it", () => {
       { deltaX: 5, deltaY: 30, shiftKey: false },
     ),
     null,
+  );
+});
+
+test("uses sticky-note color in minimap for note nodes", () => {
+  assert.equal(
+    getNodeColor({
+      id: "n-public.note_orders",
+      type: NodeTypes.Note,
+      position: { x: 0, y: 0 },
+      data: {
+        label: "note_orders",
+        hovered: false,
+        folded: false,
+        color: "#f6e27a",
+        note: {} as never,
+        ownerNodeId: "t-public.orders",
+        lines: ["# Orders summary"],
+      },
+    } as NodeType),
+    "#f6e27a",
   );
 });

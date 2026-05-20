@@ -1,5 +1,5 @@
 import { NodeBounds } from "@/lib/math/math.helper";
-import type { Ref, Table } from "@dbml/core";
+import type { Ref, StickyNote, Table } from "@dbml/core";
 import { Edge, InternalNode, type Node } from "@xyflow/react";
 
 export type SharedNodeData = {
@@ -19,9 +19,20 @@ export type TableNodeData = SharedNodeData & {
   groupId?: string;
 };
 
+export type NoteAttachment =
+  | { kind: "table"; targetId: string }
+  | { kind: "group"; targetId: string };
+
+export type NoteNodeData = SharedNodeData & {
+  note: StickyNote;
+  ownerNodeId?: string;
+  lines: string[];
+};
+
 export const NodeTypes = {
   TableGroup: "TableGroup",
   Table: "Table",
+  Note: "Note",
 } as const;
 
 export const TableEdgeTypeName = "table-edge";
@@ -30,6 +41,8 @@ export type NodeTypes = (typeof NodeTypes)[keyof typeof NodeTypes];
 
 export type TableNodeType = Node<TableNodeData, "Table">;
 export type InternalTableNode = InternalNode & { data: TableNodeData };
+export type NoteNodeType = Node<NoteNodeData, "Note">;
+export type InternalNoteNode = InternalNode & { data: NoteNodeData };
 
 export type GroupNodeData = SharedNodeData & {
   nodeIds: string[];
@@ -43,7 +56,7 @@ export type GroupNodeData = SharedNodeData & {
 export type GroupNodeType = Node<GroupNodeData, "TableGroup">;
 export type InternalGroupNode = InternalNode & { data: GroupNodeData };
 
-export type NodeType = TableNodeType | GroupNodeType;
+export type NodeType = TableNodeType | GroupNodeType | NoteNodeType;
 
 export type ERRelationTypes = "oneOptionnal" | "one" | "many";
 

@@ -14,7 +14,10 @@
 - [ ] Composite foreign keys
 
 ## Notes 
-- [ ] Floating Notes 
+- [x] Floating Notes 
+  - [ ] Automatic layout participation
+  - [ ] Rich text editor / toolbar
+  - [ ] Drag coupling to table/group owners
 - [x] Table Notes
 - [x] Field Notes
 
@@ -37,6 +40,11 @@
 - [ ] Could group size and bounds be calculated inside component instead of state store ?
 
 # Changelog
+
+## 2026-05-21
+- Added floating DBML `Note` nodes on the canvas with saved positions and minimap support.
+- Added editor/canvas bidirectional navigation for `Note` declarations.
+- Added note attachment metadata via `@attach table:...` and `@attach group:...`, with attached notes hiding alongside hidden owners.
 
 ## 2026-05-18
 - Added bidirectional double-click navigation between the DBML editor and canvas for tables, fields, TableGroups, and refs.

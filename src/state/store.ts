@@ -30,6 +30,7 @@ import {
   parser,
   setPositionsInCode,
 } from "@/lib/dbml/node-dmbl.parser";
+import { placeNotesNearOwners } from "@/lib/dbml/sticky-note.parser";
 import {
   buildDbmlSourceMap,
   DbmlSourceMap,
@@ -339,7 +340,7 @@ const useStore = create<AppState>((set, get) => ({
     );
 
     const run = async () => {
-      let { tableNodes, groupNodes } = parseDatabaseToGraph(
+      let { tableNodes, groupNodes, noteNodes } = parseDatabaseToGraph(
         database,
         nestedGroups,
       );
@@ -377,7 +378,15 @@ const useStore = create<AppState>((set, get) => ({
         NodeType
       >;
       groupNodes = getBoundedGroups(groupNodes, nodesById);
-      const finalNodes = [...groupNodes, ...tableNodes];
+      const noteOwnersById = toMapId([...groupNodes, ...tableNodes]) as Map<
+        string,
+        NodeType
+      >;
+      noteNodes = applySavedPositions(
+        placeNotesNearOwners(noteNodes, noteOwnersById),
+        savedPositions,
+      );
+      const finalNodes = [...groupNodes, ...tableNodes, ...noteNodes];
       const existingNodeIds = new Set(finalNodes.map((node) => node.id));
       const hiddenRootNodeIds = new Set(
         [...get().hiddenRootNodeIds].filter((id) => existingNodeIds.has(id)),
@@ -394,7 +403,7 @@ const useStore = create<AppState>((set, get) => ({
         hiddenRootNodeIds,
         hiddenNodeIds: collectHiddenNodeIds(finalNodes, hiddenRootNodeIds),
       });
-      setSavedPositions(tableNodes);
+      setSavedPositions([...tableNodes, ...noteNodes]);
     };
 
     void run();
@@ -429,7 +438,9 @@ const useStore = create<AppState>((set, get) => ({
     editorInstance.setSelection(rangeToMonacoSelection(range));
     if (target.kind === "field") {
       set({ highlightedFieldId: target.id });
+      return;
     }
+    set({ highlightedFieldId: null });
   },
 
   requestFlowFocusAtEditorPosition: (position) => {
@@ -437,7 +448,11 @@ const useStore = create<AppState>((set, get) => ({
     const target = sourceMap.findTargetAtPosition(position);
     if (!target) return;
 
-    if (target.kind === "table" || target.kind === "group") {
+    if (
+      target.kind === "table" ||
+      target.kind === "group" ||
+      target.kind === "note"
+    ) {
       set({
         pendingFlowFocus: { kind: "node", nodeId: target.id },
         highlightedFieldId: null,
@@ -486,6 +501,7 @@ const useStore = create<AppState>((set, get) => ({
       const groupNodes = expanded.nodes.filter(
         (n) => n.type === NodeTypes.TableGroup,
       );
+      const noteNodes = expanded.nodes.filter((n) => n.type === NodeTypes.Note);
       const boundedGroupNodes = getBoundedGroups(
         groupNodes,
         toMapId([...groupNodes, ...tableNodes]),
@@ -495,21 +511,19 @@ const useStore = create<AppState>((set, get) => ({
       const edges = database
         ? mapDatabaseToEdges(database, expanded.foldedIds, groupParentById)
         : get().edges;
+      const nextNodes = [...boundedGroupNodes, ...tableNodes, ...noteNodes].map((node) => ({
+        ...node,
+        selected: node.id === request.nodeId,
+      })) as NodeType[];
       set({
         foldedIds: expanded.foldedIds,
-        nodes: [...boundedGroupNodes, ...tableNodes].map((node) => ({
-          ...node,
-          selected: node.id === request.nodeId,
-        })),
+        nodes: nextNodes,
         edges: decorateEdges(
           edges.map((edge) => ({
             ...edge,
             selected: false,
           })),
-          [...boundedGroupNodes, ...tableNodes].map((node) => ({
-            ...node,
-            selected: node.id === request.nodeId,
-          })),
+          nextNodes,
           null,
           null,
         ),
@@ -572,11 +586,12 @@ const useStore = create<AppState>((set, get) => ({
     const groupNodes = positionedNodes.filter(
       (n) => n.type === NodeTypes.TableGroup,
     );
+    const noteNodes = positionedNodes.filter((n) => n.type === NodeTypes.Note);
     const boundedGroupNodes = getBoundedGroups(
       groupNodes,
       toMapId([...groupNodes, ...tableNodes]),
     );
-    const nodes = [...boundedGroupNodes, ...tableNodes];
+    const nodes = [...boundedGroupNodes, ...tableNodes, ...noteNodes];
     const groupParentById = buildGroupParentIndex(boundedGroupNodes);
     const database = get().database;
     const edges = database
@@ -717,13 +732,14 @@ const useStore = create<AppState>((set, get) => ({
 
       const tableNodes = nodes.filter((n) => n.type === NodeTypes.Table);
       const groupNodes = nodes.filter((n) => n.type === NodeTypes.TableGroup);
+      const noteNodes = nodes.filter((n) => n.type === NodeTypes.Note);
 
       const newGroupNodes = getBoundedGroups(
         groupNodes,
         toMapId([...groupNodes, ...tableNodes]),
       );
 
-      set({ nodes: [...newGroupNodes, ...tableNodes] });
+      set({ nodes: [...newGroupNodes, ...tableNodes, ...noteNodes] });
     }, 0);
   },
 
@@ -741,13 +757,14 @@ const useStore = create<AppState>((set, get) => ({
 
       const tableNodes = nodes.filter((n) => n.type === NodeTypes.Table);
       const groupNodes = nodes.filter((n) => n.type === NodeTypes.TableGroup);
+      const noteNodes = nodes.filter((n) => n.type === NodeTypes.Note);
 
       const newGroupNodes = getBoundedGroups(
         groupNodes,
         toMapId([...groupNodes, ...tableNodes]),
       );
 
-      set({ nodes: [...newGroupNodes, ...tableNodes] });
+      set({ nodes: [...newGroupNodes, ...tableNodes, ...noteNodes] });
     }, 0);
   },
 
@@ -805,7 +822,7 @@ const useStore = create<AppState>((set, get) => ({
 
   onNodeMouseEnter: (node: NodeType) => {
     node.data.hovered = true;
-    const hoveredNodeId = node.type === NodeTypes.Table ? node.id : null;
+    const hoveredNodeId = node.id;
 
     //fix popup under other selected nodes when hovering a table node
     if (node.type === NodeTypes.Table) {
@@ -879,6 +896,7 @@ const useStore = create<AppState>((set, get) => ({
 
     const tableNodes = nodes.filter((n) => n.type === NodeTypes.Table);
     let groupNodes = nodes.filter((n) => n.type === NodeTypes.TableGroup);
+    const noteNodes = nodes.filter((n) => n.type === NodeTypes.Note);
 
     const run = async () => {
       const layout = await layoutGraph({
@@ -898,9 +916,9 @@ const useStore = create<AppState>((set, get) => ({
       );
 
       set({
-        nodes: [...newGroupNodes, ...newTableNodes],
+        nodes: [...newGroupNodes, ...newTableNodes, ...noteNodes],
       });
-      get().setSavedPositions(newTableNodes);
+      get().setSavedPositions([...newTableNodes, ...noteNodes]);
       setTimeout(() => fitView(), 0);
     };
 

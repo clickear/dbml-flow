@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   NodeTypes,
   type GroupNodeType,
+  type NoteNodeType,
   type TableEdgeType,
   type TableNodeType,
 } from "@/types/nodes.types";
@@ -66,6 +67,22 @@ function positionedTable(
     height: 50,
     initialWidth: 100,
     initialHeight: 50,
+  };
+}
+
+function note(id: string, label: string, ownerNodeId?: string): NoteNodeType {
+  return {
+    id,
+    type: NodeTypes.Note,
+    position: { x: 0, y: 0 },
+    data: {
+      label,
+      hovered: false,
+      folded: false,
+      note: {} as never,
+      ownerNodeId,
+      lines: [],
+    },
   };
 }
 
@@ -227,4 +244,16 @@ test("recomputes visible group bounds after hidden children are filtered", () =>
   assert.equal(parent?.data.bounds.xMin, 0);
   assert.equal(parent?.data.bounds.xMax, 100);
   assert.equal(parent?.data.bounds.width, 100);
+});
+
+test("hides attached notes when their owner table is hidden", () => {
+  const graphNodes = [
+    table("t-public.users", "users"),
+    note("n-public.users_note", "users_note", "t-public.users"),
+  ];
+
+  assert.deepEqual(
+    collectHiddenNodeIds(graphNodes, new Set(["t-public.users"])),
+    new Set(["t-public.users", "n-public.users_note"]),
+  );
 });

@@ -5,6 +5,7 @@ import { toMapId } from "@/lib/utils";
 import {
   NodeTypes,
   type GroupNodeType,
+  type NoteNodeType,
   type NodeType,
 } from "@/types/nodes.types";
 
@@ -19,7 +20,7 @@ function toTreeItem(
   node: NodeType,
   nodesById: Map<string, NodeType>,
 ): StructureTreeItem {
-  if (node.type === NodeTypes.Table) {
+  if (node.type !== NodeTypes.TableGroup) {
     return {
       id: node.id,
       label: node.data.label,
@@ -43,6 +44,9 @@ export function buildStructureTree(nodes: NodeType[]): StructureTreeItem[] {
   const nodesById = new Map(nodes.map((node) => [node.id, node]));
   return nodes
     .filter((node) => {
+      if (node.type === NodeTypes.Note) {
+        return false;
+      }
       if (node.type === NodeTypes.TableGroup) {
         return !node.data.parentGroupId;
       }
@@ -69,7 +73,11 @@ export function collectHiddenNodeIds(
   nodes: NodeType[],
   hiddenRootIds: Set<string>,
 ): Set<string> {
-  const nodesById = new Map(nodes.map((node) => [node.id, node]));
+  const visibleNodes = nodes.filter((node) => node.type !== NodeTypes.Note);
+  const notes = nodes.filter(
+    (node): node is NoteNodeType => node.type === NodeTypes.Note,
+  );
+  const nodesById = new Map(visibleNodes.map((node) => [node.id, node]));
   const hidden = new Set<string>();
 
   for (const id of hiddenRootIds) {
@@ -78,6 +86,12 @@ export function collectHiddenNodeIds(
     hidden.add(id);
     if (node.type === NodeTypes.TableGroup) {
       collectGroupDescendants(node, nodesById, hidden);
+    }
+  }
+
+  for (const note of notes) {
+    if (note.data.ownerNodeId && hidden.has(note.data.ownerNodeId)) {
+      hidden.add(note.id);
     }
   }
 
@@ -96,7 +110,9 @@ function getDescendantIds(
 function findParentGroupId(node: NodeType): string | undefined {
   return node.type === NodeTypes.TableGroup
     ? node.data.parentGroupId
-    : node.data.groupId;
+    : node.type === NodeTypes.Table
+      ? node.data.groupId
+      : undefined;
 }
 
 function syncParentHiddenState(
@@ -180,13 +196,16 @@ export function getVisibleGraph<TEdge extends Edge>(
   const groupNodes = visibleNodes.filter(
     (node): node is GroupNodeType => node.type === NodeTypes.TableGroup,
   );
+  const noteNodes = visibleNodes.filter(
+    (node): node is NoteNodeType => node.type === NodeTypes.Note,
+  );
   const boundedGroupNodes = getBoundedGroups(
     groupNodes,
     toMapId([...groupNodes, ...tableNodes]),
   );
 
   return {
-    nodes: [...boundedGroupNodes, ...tableNodes],
+    nodes: [...boundedGroupNodes, ...tableNodes, ...noteNodes],
     edges: filterVisibleEdges(edges, hiddenNodeIds),
   };
 }

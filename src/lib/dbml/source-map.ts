@@ -1,5 +1,7 @@
 import type { ISelection } from "monaco-editor";
 
+import { getNoteIdFromName } from "./sticky-note.parser";
+
 const DEFAULT_SCHEMA = "public";
 
 export type SourceRange = {
@@ -18,6 +20,7 @@ export type DbmlSourceTarget =
   | { kind: "table"; id: string }
   | { kind: "field"; id: string; tableId: string }
   | { kind: "group"; id: string }
+  | { kind: "note"; id: string }
   | { kind: "edge"; sourceFieldId: string; targetFieldId: string };
 
 export type SourceTable = {
@@ -50,6 +53,15 @@ export type SourceGroup = {
   bodyEnd: number;
 };
 
+export type SourceNote = {
+  id: string;
+  name: string;
+  schema: string;
+  nameRange: SourceRange;
+  declarationRange: SourceRange;
+  blockRange: SourceRange;
+};
+
 export type SourceGroupMember = {
   name: string;
   nameRange: SourceRange;
@@ -67,6 +79,7 @@ export type DbmlSourceMap = {
   tables: Map<string, SourceTable>;
   fields: Map<string, SourceField>;
   groups: Map<string, SourceGroup>;
+  notes: Map<string, SourceNote>;
   groupMembers: SourceGroupMember[];
   refs: SourceRef[];
   findTargetAtPosition: (position: SourcePosition) => DbmlSourceTarget | null;
@@ -80,7 +93,7 @@ type IdentifierToken = {
 };
 
 type ParsedBlock = {
-  kind: "table" | "group";
+  kind: "table" | "group" | "note";
   name: IdentifierToken;
   alias?: IdentifierToken;
   schema: string;
@@ -96,6 +109,7 @@ export function buildDbmlSourceMap(code: string): DbmlSourceMap {
   const tables = new Map<string, SourceTable>();
   const fields = new Map<string, SourceField>();
   const groups = new Map<string, SourceGroup>();
+  const notes = new Map<string, SourceNote>();
   const tableAliases = new Map<string, { schema: string; tableName: string }>();
   const groupMembers: SourceGroupMember[] = [];
   const refs: SourceRef[] = [];
@@ -134,7 +148,7 @@ export function buildDbmlSourceMap(code: string): DbmlSourceMap {
           ),
         });
       }
-    } else {
+    } else if (block.kind === "group") {
       const groupId = getGroupIdFromName(block.name.value, block.schema);
       groups.set(groupId, {
         id: groupId,
@@ -145,6 +159,16 @@ export function buildDbmlSourceMap(code: string): DbmlSourceMap {
         blockRange: toRange(lineStarts, block.start, block.end),
         bodyStart: block.bodyStart,
         bodyEnd: block.bodyEnd,
+      });
+    } else {
+      const noteId = getNoteIdFromName(block.name.value, block.schema);
+      notes.set(noteId, {
+        id: noteId,
+        name: block.name.value,
+        schema: block.schema,
+        nameRange: toRange(lineStarts, block.name.start, block.name.end),
+        declarationRange: toRange(lineStarts, block.start, block.declarationEnd),
+        blockRange: toRange(lineStarts, block.start, block.end),
       });
     }
   }
@@ -198,6 +222,11 @@ export function buildDbmlSourceMap(code: string): DbmlSourceMap {
         return { kind: "group", id: group.id };
       }
     }
+    for (const note of notes.values()) {
+      if (rangeContains(note.nameRange, position)) {
+        return { kind: "note", id: note.id };
+      }
+    }
     for (const table of tables.values()) {
       if (rangeContains(table.nameRange, position)) {
         return { kind: "table", id: table.id };
@@ -213,6 +242,11 @@ export function buildDbmlSourceMap(code: string): DbmlSourceMap {
         return { kind: "table", id: table.id };
       }
     }
+    for (const note of notes.values()) {
+      if (rangeContains(note.declarationRange, position)) {
+        return { kind: "note", id: note.id };
+      }
+    }
     return null;
   };
 
@@ -221,6 +255,7 @@ export function buildDbmlSourceMap(code: string): DbmlSourceMap {
     tables,
     fields,
     groups,
+    notes,
     groupMembers,
     refs,
     findTargetAtPosition,
@@ -264,6 +299,9 @@ export function getRangeForTarget(
   }
   if (target.kind === "group") {
     return sourceMap.groups.get(target.id)?.nameRange ?? null;
+  }
+  if (target.kind === "note") {
+    return sourceMap.notes.get(target.id)?.nameRange ?? null;
   }
   const ref = sourceMap.refs.find(
     (item) =>
@@ -310,12 +348,17 @@ export function normalizeIdentifierText(raw: string): string {
 
 function parseBlocks(code: string): ParsedBlock[] {
   const blocks: ParsedBlock[] = [];
-  const marker = /\b(TableGroup|Table)\s+/gu;
+  const marker = /\b(TableGroup|Table|Note)\s+/gu;
   let match: RegExpExecArray | null;
 
   while ((match = marker.exec(code)) !== null) {
     if (isInLineComment(code, match.index)) continue;
-    const kind = match[1] === "TableGroup" ? "group" : "table";
+    const kind =
+      match[1] === "TableGroup"
+        ? "group"
+        : match[1] === "Note"
+          ? "note"
+          : "table";
     const name = readIdentifierPath(code, match.index + match[0].length);
     if (!name) continue;
     const alias = kind === "table" ? readAlias(code, name.end) : undefined;

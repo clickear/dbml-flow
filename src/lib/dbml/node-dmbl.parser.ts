@@ -14,6 +14,7 @@ import {
   getGroupNodeId,
   type NestedGroupModel,
 } from "./nested-group.parser";
+import { mapNoteToNode } from "./sticky-note.parser";
 
 //#region DBML to Nodes
 
@@ -25,8 +26,10 @@ export function parseDatabaseToGraph(
 ) {
   const tables = database.schemas.flatMap((s) => s.tables);
   const groups = database.schemas.flatMap((s) => s.tableGroups);
+  const notes = database.notes ?? [];
 
   const tableNodes = tables.map((t) => mapTableToNode(t));
+  const noteNodes = notes.map((note) => mapNoteToNode(note));
 
   const tableNodesById = new Map(tableNodes.map((n) => [n.id, n]));
   const groupNodes = groups.map((g) =>
@@ -36,6 +39,7 @@ export function parseDatabaseToGraph(
   return {
     tableNodes,
     groupNodes,
+    noteNodes,
   };
 }
 
