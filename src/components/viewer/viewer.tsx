@@ -30,6 +30,8 @@ import ERMarkers from "../edges/markers";
 import TableEdge from "../edges/table-edge";
 import { TableGroupNode } from "../table-group-node";
 import {
+  getMiniMapHorizontalWheelViewport,
+  getMiniMapInteractionProps,
   getNodeCenter,
   getNodeClass,
   getNodeColor,
@@ -128,7 +130,29 @@ function ERViewer({ className, ...props }: FlowProps) {
   ]);
 
   const map = minimap ? (
-    <MiniMap nodeColor={getNodeColor} nodeClassName={getNodeClass} />
+    <div
+      onWheelCapture={(event) => {
+        const nextViewport = getMiniMapHorizontalWheelViewport(getViewport(), {
+          deltaX: event.deltaX,
+          deltaY: event.deltaY,
+          shiftKey: event.shiftKey,
+        });
+
+        if (!nextViewport) {
+          return;
+        }
+
+        event.preventDefault();
+        event.stopPropagation();
+        void setViewport(nextViewport, { duration: 0 });
+      }}
+    >
+      <MiniMap
+        nodeColor={getNodeColor}
+        nodeClassName={getNodeClass}
+        {...getMiniMapInteractionProps()}
+      />
+    </div>
   ) : null;
   const visibleGraph = getVisibleGraph(nodes, edges, hiddenNodeIds);
 

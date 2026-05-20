@@ -1,0 +1,39 @@
+# Changelog
+
+## Unreleased
+
+### Added
+- Minimap now supports dragging the visible viewport, wheel zoom, horizontal wheel panning, and `Shift + wheel` horizontal panning.
+
+### Changed
+- Minimap horizontal wheel handling now runs from an outer capture layer because `@xyflow/react` `MiniMap` does not forward `onWheel` to its internal `svg`.
+
+## 2026-05-20
+
+### Recent commits
+- `d835b81` `feat: highlight relations on table and ref hover`
+  - Reused the shared highlight color for relation edges.
+  - Unified edge highlighting across table selection, table hover, and ref hover.
+  - Added edge interaction and visual-state tests.
+- `7fe5c1a` `feat: add layout mode picker`
+  - Added inline layout mode selection in the control row.
+  - Added tests for the layout mode control visual state.
+  - Added a layout mode implementation plan document.
+- `07d7131` `docs: add layout mode picker design`
+  - Added the layout mode picker design spec under `docs/superpowers/specs/`.
+- `2b6cb80` `Change default layout mode to 'compact'`
+  - Switched the default layout mode from the previous setting to `compact`.
+- `cd48667` `chore: remove legacy layout utilities`
+  - Removed old layout utility code no longer used by the orchestrated layout path.
+- `571f98f` `feat: integrate async layout orchestration`
+  - Moved layout execution into an async orchestration flow in the store.
+  - Updated rearrange behavior to work with the async layout path.
+- `f6f3387` `feat: orchestrate layout strategies`
+  - Added the layout orchestrator and its dedicated test coverage.
+- `d0cc2a8` `feat: add elk layout strategy`
+  - Added ELK-based layout strategy implementation and tests.
+
+## 2026-05-19
+
+### Documentation
+- Added layout algorithm refactor design and implementation plan documents under `docs/superpowers/`.

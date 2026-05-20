@@ -1,5 +1,5 @@
 import { NodeType, NodeTypes } from "@/types/nodes.types";
-import type { Node } from "@xyflow/react";
+import type { Node, Viewport } from "@xyflow/react";
 
 export function getNodeColor(node: NodeType) {
   return (node.data.color as string) ?? "#636363ff";
@@ -48,4 +48,38 @@ export function getNodesCenter(
 
 export function getPanOnlyCenterOptions(zoom: number, duration = 250) {
   return { duration, zoom };
+}
+
+export function getMiniMapInteractionProps() {
+  return {
+    pannable: true,
+    zoomable: true,
+  };
+}
+
+export function getMiniMapHorizontalWheelViewport(
+  viewport: Viewport,
+  {
+    deltaX,
+    deltaY,
+    shiftKey,
+  }: {
+    deltaX: number;
+    deltaY: number;
+    shiftKey: boolean;
+  },
+) {
+  const horizontalDelta = shiftKey && deltaX === 0 ? deltaY : deltaX;
+  const isHorizontalIntent =
+    Math.abs(horizontalDelta) > 0 &&
+    (shiftKey || Math.abs(horizontalDelta) > Math.abs(deltaY));
+
+  if (!isHorizontalIntent) {
+    return null;
+  }
+
+  return {
+    ...viewport,
+    x: viewport.x - horizontalDelta,
+  };
 }

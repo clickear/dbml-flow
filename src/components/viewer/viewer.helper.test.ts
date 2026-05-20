@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  getMiniMapHorizontalWheelViewport,
+  getMiniMapInteractionProps,
   getNodeCenter,
   getNodesCenter,
   getPanOnlyCenterOptions,
@@ -44,4 +46,41 @@ test("keeps the current zoom when centering the viewport", () => {
     duration: 250,
     zoom: 0.42,
   });
+});
+
+test("enables minimap panning and zooming", () => {
+  assert.deepEqual(getMiniMapInteractionProps(), {
+    pannable: true,
+    zoomable: true,
+  });
+});
+
+test("maps horizontal minimap wheel movement to viewport x offset", () => {
+  assert.deepEqual(
+    getMiniMapHorizontalWheelViewport(
+      { x: 120, y: 40, zoom: 0.5 },
+      { deltaX: 60, deltaY: 5, shiftKey: false },
+    ),
+    { x: 60, y: 40, zoom: 0.5 },
+  );
+});
+
+test("treats shift+wheel as horizontal minimap panning", () => {
+  assert.deepEqual(
+    getMiniMapHorizontalWheelViewport(
+      { x: 120, y: 40, zoom: 0.5 },
+      { deltaX: 0, deltaY: 30, shiftKey: true },
+    ),
+    { x: 90, y: 40, zoom: 0.5 },
+  );
+});
+
+test("ignores vertical minimap wheel movement so zoom can handle it", () => {
+  assert.equal(
+    getMiniMapHorizontalWheelViewport(
+      { x: 120, y: 40, zoom: 0.5 },
+      { deltaX: 5, deltaY: 30, shiftKey: false },
+    ),
+    null,
+  );
 });
