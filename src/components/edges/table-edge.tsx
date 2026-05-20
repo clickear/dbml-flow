@@ -14,6 +14,7 @@ import {
 import { useMemo } from "react";
 import { ERMakerLabels } from "./markers";
 import { getEdgePath } from "./table-edge.helpers";
+import { getTableEdgeVisualState } from "./table-edge.visuals";
 
 export const borderRadius = 5;
 
@@ -29,13 +30,14 @@ function TableEdge({
   animated,
   selected,
   data,
-  ...props
 }: EdgeProps) {
   const sourceTableNode = useInternalNode(source) as InternalTableNode;
   const targetTableNode = useInternalNode(target) as InternalTableNode;
 
   const edgesRelativeData = useStore((s) => s.edgesRelativeData);
   const isExporting = useStore((s) => s.isExporting);
+  const onEdgeMouseEnter = useStore((s) => s.onEdgeMouseEnter);
+  const onEdgeMouseLeave = useStore((s) => s.onEdgeMouseLeave);
 
   const { edgePath, labelX, labelY, sx, sy, tx, ty, sourcePos, targetPos } =
     useMemo(
@@ -48,24 +50,30 @@ function TableEdge({
           markerStart || "",
           markerEnd || "",
           sourceTableNode,
-          targetTableNode
+          targetTableNode,
         ),
-      [sourceTableNode, targetTableNode, edgesRelativeData]
+      [sourceTableNode, targetTableNode, edgesRelativeData],
     );
 
   if (!edgePath) {
     return null;
   }
 
+  const visualState = getTableEdgeVisualState({
+    selected: !!selected,
+    animated: !!animated,
+    defaultStroke: typeof style?.stroke === "string" ? style.stroke : undefined,
+  });
+
   return (
     <>
       <BaseEdge
         path={edgePath}
         id={id}
-        strokeWidth={selected ? 7 : 5}
+        strokeWidth={visualState.strokeWidth}
         style={{
           ...style,
-          stroke: selected ? "var(--color-primary)" : style?.stroke,
+          stroke: visualState.stroke,
         }}
         markerStart={markerStart}
         markerEnd={markerEnd}
@@ -78,6 +86,8 @@ function TableEdge({
         stroke="transparent"
         strokeWidth={24}
         className="react-flow__edge-interaction"
+        onMouseEnter={() => onEdgeMouseEnter(id)}
+        onMouseLeave={() => onEdgeMouseLeave(id)}
         onDoubleClick={(event) => {
           event.stopPropagation();
           const tableEdgeData = data as TableEdgeData | undefined;
@@ -92,7 +102,8 @@ function TableEdge({
         }}
       />
       <EdgeLabels
-        showRefName={!!animated || isExporting}
+        edgeId={id}
+        showRefName={visualState.showRefName || isExporting}
         displaySource={true}
         displayTarget={true}
         data={data}
@@ -110,6 +121,7 @@ function TableEdge({
 }
 
 export type EdgeLabelsProps = {
+  edgeId: string;
   showRefName: boolean;
   displaySource: boolean;
   displayTarget: boolean;
@@ -125,6 +137,7 @@ export type EdgeLabelsProps = {
 };
 
 export function EdgeLabels({
+  edgeId,
   showRefName,
   displaySource,
   displayTarget,
@@ -149,10 +162,16 @@ export function EdgeLabels({
   return (
     <EdgeLabelRenderer>
       {showRefName && label ? (
-        <EdgeLabel label={label} labelX={labelX} labelY={labelY} />
+        <EdgeLabel
+          edgeId={edgeId}
+          label={label}
+          labelX={labelX}
+          labelY={labelY}
+        />
       ) : null}
       {displaySource && (
         <EdgeMarkerLabel
+          edgeId={edgeId}
           label={sourceLabel}
           labelX={sx}
           labelY={sy}
@@ -161,6 +180,7 @@ export function EdgeLabels({
       )}
       {displayTarget && (
         <EdgeMarkerLabel
+          edgeId={edgeId}
           label={targetLabel}
           labelX={tx}
           labelY={ty}
@@ -172,16 +192,21 @@ export function EdgeLabels({
 }
 
 export function EdgeMarkerLabel({
+  edgeId,
   label,
   labelX,
   labelY,
   transX,
 }: {
+  edgeId: string;
   label: string;
   labelX: number;
   labelY: number;
   transX: number;
 }) {
+  const onEdgeMouseEnter = useStore((s) => s.onEdgeMouseEnter);
+  const onEdgeMouseLeave = useStore((s) => s.onEdgeMouseLeave);
+
   return (
     <div
       style={{
@@ -190,6 +215,8 @@ export function EdgeMarkerLabel({
         padding: 0,
       }}
       className="nodrag nopan whitespace-nowrap text-[0.6rem] leading-none"
+      onMouseEnter={() => onEdgeMouseEnter(edgeId)}
+      onMouseLeave={() => onEdgeMouseLeave(edgeId)}
     >
       {label}
     </div>
@@ -197,14 +224,19 @@ export function EdgeMarkerLabel({
 }
 
 export function EdgeLabel({
+  edgeId,
   label,
   labelX,
   labelY,
 }: {
+  edgeId: string;
   label: string;
   labelX: number;
   labelY: number;
 }) {
+  const onEdgeMouseEnter = useStore((s) => s.onEdgeMouseEnter);
+  const onEdgeMouseLeave = useStore((s) => s.onEdgeMouseLeave);
+
   return (
     <div
       style={{
@@ -212,6 +244,8 @@ export function EdgeLabel({
         transform: `translate(-50%, -50%)  translate(${labelX}px,${labelY}px)`,
       }}
       className="nodrag nopan px-1 bg-gray-100 text-gray-800 text-xs rounded-xs border border-gray-300"
+      onMouseEnter={() => onEdgeMouseEnter(edgeId)}
+      onMouseLeave={() => onEdgeMouseLeave(edgeId)}
     >
       {label}
     </div>

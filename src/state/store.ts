@@ -42,6 +42,7 @@ import {
   computeEdgesRelativeData,
   EdgesRelativeData,
 } from "@/lib/flow/edges.helpers";
+import { applyEdgeInteractionState } from "@/lib/flow/edge-interactions";
 import {
   computeRelatedGroupChanges,
   getBoundedGroups,
@@ -119,6 +120,8 @@ export type AppState = {
   isExporting: boolean;
   highlightedFieldId: string | null;
   pendingFlowFocus: FlowFocusRequest | null;
+  hoveredNodeId: string | null;
+  hoveredEdgeId: string | null;
   savedViews: SavedCanvasView[];
   activeViewId: string | null;
   viewDrawerOpen: boolean;
@@ -157,6 +160,8 @@ export type AppState = {
   onChange: (selected: OnSelectionChangeParams<NodeType, Edge>) => void;
   onNodeMouseEnter: (node: NodeType) => void;
   onNodeMouseLeave: (node: NodeType) => void;
+  onEdgeMouseEnter: (edgeId: string) => void;
+  onEdgeMouseLeave: (edgeId: string) => void;
   foldNode: (nodeId: string, fold: boolean) => void;
   setRelationOnly: (value: boolean) => void;
   overrideRelationOnly: (nodeId: string, value: boolean) => void;
@@ -218,6 +223,20 @@ function createViewId() {
   return `view-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
+function decorateEdges(
+  edges: Edge[],
+  nodes: NodeType[],
+  hoveredNodeId: string | null,
+  hoveredEdgeId: string | null,
+) {
+  return applyEdgeInteractionState(edges, {
+    selectedNodeIds: nodes.filter((node) => node.selected).map((node) => node.id),
+    selectedEdgeIds: edges.filter((edge) => edge.selected).map((edge) => edge.id),
+    hoveredNodeId,
+    hoveredEdgeId,
+  });
+}
+
 // this is our useStore hook that we can use in our components to get parts of the store and call actions
 const useStore = create<AppState>((set, get) => ({
   // -------- Initial State --------
@@ -245,6 +264,8 @@ const useStore = create<AppState>((set, get) => ({
   isExporting: false,
   highlightedFieldId: null,
   pendingFlowFocus: null,
+  hoveredNodeId: null,
+  hoveredEdgeId: null,
   savedViews: [],
   activeViewId: null,
   viewDrawerOpen: true,
@@ -364,7 +385,12 @@ const useStore = create<AppState>((set, get) => ({
 
       set({
         nodes: finalNodes,
-        edges,
+        edges: decorateEdges(
+          edges,
+          finalNodes,
+          get().hoveredNodeId,
+          get().hoveredEdgeId,
+        ),
         hiddenRootNodeIds,
         hiddenNodeIds: collectHiddenNodeIds(finalNodes, hiddenRootNodeIds),
       });
@@ -475,32 +501,45 @@ const useStore = create<AppState>((set, get) => ({
           ...node,
           selected: node.id === request.nodeId,
         })),
-        edges: edges.map((edge) => ({
-          ...edge,
-          selected: false,
-          animated: false,
-        })),
+        edges: decorateEdges(
+          edges.map((edge) => ({
+            ...edge,
+            selected: false,
+          })),
+          [...boundedGroupNodes, ...tableNodes].map((node) => ({
+            ...node,
+            selected: node.id === request.nodeId,
+          })),
+          null,
+          null,
+        ),
+        hoveredNodeId: null,
+        hoveredEdgeId: null,
         highlightedFieldId: request.fieldId ?? null,
       });
       return;
     }
 
-    set({
-      nodes: get().nodes.map((node) => ({
+    const nodes = get().nodes.map((node) => ({
         ...node,
         selected: false,
-      })),
-      edges: get().edges.map((edge) => {
-        const selected =
-          edge.id === request.edgeId ||
-          (edge.data?.sourcefieldId === request.sourceFieldId &&
-            edge.data?.targetfieldId === request.targetFieldId);
-        return {
-          ...edge,
-          selected,
-          animated: selected,
-        };
-      }),
+      }));
+    const edges = get().edges.map((edge) => {
+      const selected =
+        edge.id === request.edgeId ||
+        (edge.data?.sourcefieldId === request.sourceFieldId &&
+          edge.data?.targetfieldId === request.targetFieldId);
+      return {
+        ...edge,
+        selected,
+      };
+    });
+
+    set({
+      nodes,
+      edges: decorateEdges(edges, nodes, null, null),
+      hoveredNodeId: null,
+      hoveredEdgeId: null,
       highlightedFieldId: null,
     });
   },
@@ -548,7 +587,12 @@ const useStore = create<AppState>((set, get) => ({
     set({
       activeViewId: viewId,
       nodes,
-      edges,
+      edges: decorateEdges(
+        edges,
+        nodes,
+        get().hoveredNodeId,
+        get().hoveredEdgeId,
+      ),
       foldedIds: sanitized.foldedIds,
       relationOnly: sanitized.relationOnly,
       relationOnlyOverrides: sanitized.relationOnlyOverrides,
@@ -650,7 +694,16 @@ const useStore = create<AppState>((set, get) => ({
       groupParentById,
     );
 
-    set({ foldedIds: newFoldedIds, nodes: newNodes, edges });
+    set({
+      foldedIds: newFoldedIds,
+      nodes: newNodes,
+      edges: decorateEdges(
+        edges,
+        newNodes,
+        get().hoveredNodeId,
+        get().hoveredEdgeId,
+      ),
+    });
   },
 
   setRelationOnly: (value: boolean) => {
@@ -716,30 +769,43 @@ const useStore = create<AppState>((set, get) => ({
   },
 
   onEdgesChange: (changes: EdgeChange[]) => {
+    const edges = applyEdgeChanges(changes, get().edges);
     set({
-      edges: applyEdgeChanges(changes, get().edges),
+      edges: decorateEdges(
+        edges,
+        get().nodes,
+        get().hoveredNodeId,
+        get().hoveredEdgeId,
+      ),
     });
   },
 
   onConnect: (connection: Connection) => {
+    const edges = addEdge(connection, get().edges);
     set({
-      edges: addEdge(connection, get().edges),
+      edges: decorateEdges(
+        edges,
+        get().nodes,
+        get().hoveredNodeId,
+        get().hoveredEdgeId,
+      ),
     });
   },
 
   onChange: (selected: OnSelectionChangeParams<NodeType, Edge>) => {
-    const edgesAnimated = get().edges.map((edge) => ({
-      ...edge,
-      animated: selected.nodes.some(
-        (n) => n.id === edge.source || n.id === edge.target,
-      ),
-    }));
+    const edgesAnimated = applyEdgeInteractionState(get().edges, {
+      selectedNodeIds: selected.nodes.map((node) => node.id),
+      selectedEdgeIds: selected.edges.map((edge) => edge.id),
+      hoveredNodeId: get().hoveredNodeId,
+      hoveredEdgeId: get().hoveredEdgeId,
+    });
 
     set({ edges: edgesAnimated });
   },
 
   onNodeMouseEnter: (node: NodeType) => {
     node.data.hovered = true;
+    const hoveredNodeId = node.type === NodeTypes.Table ? node.id : null;
 
     //fix popup under other selected nodes when hovering a table node
     if (node.type === NodeTypes.Table) {
@@ -747,6 +813,16 @@ const useStore = create<AppState>((set, get) => ({
         .querySelector(`[data-id="${node.id}"]`)
         ?.classList.add("z-2000!");
     }
+
+    set({
+      hoveredNodeId,
+      edges: decorateEdges(
+        get().edges,
+        get().nodes,
+        hoveredNodeId,
+        get().hoveredEdgeId,
+      ),
+    });
   },
 
   onNodeMouseLeave: (node: NodeType) => {
@@ -756,6 +832,33 @@ const useStore = create<AppState>((set, get) => ({
         .querySelector(`[data-id="${node.id}"]`)
         ?.classList.remove("z-2000!");
     }
+
+    if (get().hoveredNodeId !== node.id) {
+      return;
+    }
+
+    set({
+      hoveredNodeId: null,
+      edges: decorateEdges(get().edges, get().nodes, null, get().hoveredEdgeId),
+    });
+  },
+
+  onEdgeMouseEnter: (edgeId: string) => {
+    set({
+      hoveredEdgeId: edgeId,
+      edges: decorateEdges(get().edges, get().nodes, get().hoveredNodeId, edgeId),
+    });
+  },
+
+  onEdgeMouseLeave: (edgeId: string) => {
+    if (get().hoveredEdgeId !== edgeId) {
+      return;
+    }
+
+    set({
+      hoveredEdgeId: null,
+      edges: decorateEdges(get().edges, get().nodes, get().hoveredNodeId, null),
+    });
   },
 
   // Layout management
