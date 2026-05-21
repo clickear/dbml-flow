@@ -7,8 +7,7 @@ export type CompositeRelationRow = {
   localFieldIds: string[];
   sourceFieldId: string;
   targetFieldId: string;
-  sourceHandleId: string;
-  targetHandleId: string;
+  handleId: string;
   remoteTableName: string;
   fieldPairs: Array<{ local: string; remote: string }>;
 };
@@ -41,6 +40,7 @@ export function getCompositeRowsForTable(
             data.sourceFieldIds,
             data.targetFieldIds,
             edge.target,
+            getCompositeSourceHandleId(edge.id),
           ),
         ];
       }
@@ -53,6 +53,7 @@ export function getCompositeRowsForTable(
             data.targetFieldIds,
             data.sourceFieldIds,
             edge.source,
+            getCompositeTargetHandleId(edge.id),
           ),
         ];
       }
@@ -67,6 +68,7 @@ function buildRow(
   localFieldIds: string[],
   remoteFieldIds: string[],
   remoteTableId: string,
+  handleId: string,
 ): CompositeRelationRow {
   const localNames = localFieldIds.map(getFieldNameFromId);
   const remoteNames = remoteFieldIds.map(getFieldNameFromId);
@@ -78,8 +80,7 @@ function buildRow(
     localFieldIds,
     sourceFieldId: localFieldIds[0] ?? "",
     targetFieldId: remoteFieldIds[0] ?? "",
-    sourceHandleId: getCompositeSourceHandleId(edgeId),
-    targetHandleId: getCompositeTargetHandleId(edgeId),
+    handleId,
     remoteTableName: getTableNameFromId(remoteTableId),
     fieldPairs: localNames.map((local, index) => ({
       local,

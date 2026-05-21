@@ -53,7 +53,7 @@ export function TableCompositeRelationsView({
               renderHandle(row, "left")
             ) : (
               <HiddenHandle
-                id={row.targetHandleId}
+                id={row.handleId}
                 type="target"
                 position={Position.Left}
               />
@@ -63,7 +63,7 @@ export function TableCompositeRelationsView({
               renderHandle(row, "right")
             ) : (
               <HiddenHandle
-                id={row.sourceHandleId}
+                id={row.handleId}
                 type="source"
                 position={Position.Right}
               />

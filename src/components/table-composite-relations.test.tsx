@@ -19,8 +19,7 @@ test("renders composite relationship rows with grouped labels", () => {
     ],
     sourceFieldId: "f-ecommerce.merchant_periods.merchant_id",
     targetFieldId: "f-ecommerce.merchants.id",
-    sourceHandleId: "cr-source-ref-1",
-    targetHandleId: "cr-target-ref-1",
+    handleId: "cr-source-ref-1",
     remoteTableName: "merchants",
     fieldPairs: [
       { local: "merchant_id", remote: "id" },
@@ -38,11 +37,7 @@ test("renders composite relationship rows with grouped labels", () => {
       renderHandle={(compositeRow, side) => (
         <span
           data-side={side}
-          data-handle-id={
-            side === "left"
-              ? compositeRow.targetHandleId
-              : compositeRow.sourceHandleId
-          }
+          data-handle-id={compositeRow.handleId}
         />
       )}
     />,
@@ -50,7 +45,14 @@ test("renders composite relationship rows with grouped labels", () => {
 
   assert.match(html, /\(merchant_id, country_code\)/);
   assert.match(html, /data-handle-id="cr-source-ref-1"/);
-  assert.match(html, /data-handle-id="cr-target-ref-1"/);
+  assert.match(
+    html,
+    /data-side="left" data-handle-id="cr-source-ref-1"|data-handle-id="cr-source-ref-1" data-side="left"/,
+  );
+  assert.match(
+    html,
+    /data-side="right" data-handle-id="cr-source-ref-1"|data-handle-id="cr-source-ref-1" data-side="right"/,
+  );
   assert.doesNotMatch(html, /Composite FK/);
   assert.doesNotMatch(html, /merchant_id -&gt; id/);
 });
