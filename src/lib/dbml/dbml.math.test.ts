@@ -61,9 +61,6 @@ test("expands table width for composite relationship row labels", () => {
   installTextMeasurementStub();
   const table = tableWithFieldType("int");
   table.name = "merchant_periods";
-  (
-    table as unknown as { compositeRelationLabels?: string[] }
-  ).compositeRelationLabels = ["(merchant_id, country_code)"];
 
-  assert.ok(findClosestSize(table).width >= 250);
+  assert.ok(findClosestSize(table, ["(merchant_id, country_code)"]).width >= 250);
 });

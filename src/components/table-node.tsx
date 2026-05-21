@@ -1,11 +1,14 @@
 import { hasFieldDetails } from "@/lib/dbml/dbml.utils";
+import { getCompositeRowsForTable } from "@/lib/dbml/composite-relations";
+import { findClosestSize } from "@/lib/dbml/dbml.math";
 import { isHiddenByFoldedAncestors } from "@/lib/dbml/nested-group.parser";
 import { cn } from "@/lib/utils";
 import useStore from "@/state/store";
-import { type TableNodeType } from "@/types/nodes.types";
+import { type TableEdgeType, type TableNodeType } from "@/types/nodes.types";
 import type { Field, Table } from "@dbml/core";
 import { type NodeProps, useUpdateNodeInternals } from "@xyflow/react";
 import { useCallback, useMemo } from "react";
+import { TableCompositeRelations } from "./table-composite-relations";
 import { BaseNode } from "./base-node";
 import { TableFoldHeader } from "./table-fold-header";
 import { TableField } from "./table-node-field";
@@ -93,8 +96,21 @@ function TableNodeBody({
 }: TableNodeBodyProps) {
   const { relationOnly, overrideRelationOnly, relationOnlyOverrides } =
     useStore();
+  const edges = useStore((s) => s.edges as TableEdgeType[]);
   const updateNodeInternals = useUpdateNodeInternals();
   const isRelationOnly = relationOnly && !relationOnlyOverrides.has(id);
+  const compositeRows = useMemo(() => getCompositeRowsForTable(id, edges), [
+    id,
+    edges,
+  ]);
+  const compositeRelationLabels = useMemo(
+    () => compositeRows.map((row) => row.label),
+    [compositeRows],
+  );
+  const guessedDimensions = useMemo(
+    () => findClosestSize(data.table, compositeRelationLabels),
+    [compositeRelationLabels, data.table],
+  );
 
   const relationOnlyCallback = useCallback(() => {
     overrideRelationOnly(id, isRelationOnly);
@@ -107,9 +123,9 @@ function TableNodeBody({
         id={id}
         className="p-0 flex flex-col overflow-hidden"
         style={{
-          width: data.guessedDimensions?.width,
-          minWidth: data.guessedDimensions?.width,
-          maxWidth: data.guessedDimensions?.width,
+          width: guessedDimensions.width,
+          minWidth: guessedDimensions.width,
+          maxWidth: guessedDimensions.width,
           boxSizing: "border-box",
         }}
         selected={selected}
@@ -132,6 +148,7 @@ function TableNodeBody({
             )}
           </TableBody>
         </table>
+        <TableCompositeRelations rows={compositeRows} />
         {relationOnly && !data.folded && (
           <div
             className="hover:bg-accent flex items-center justify-center cursor-pointer"

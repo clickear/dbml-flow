@@ -84,6 +84,7 @@ import {
   NodePositionIndex,
   NoteNodeType,
   NodeType,
+  TableEdgeData,
   NodeTypes,
   TableEdgeType,
 } from "@/types/nodes.types";
@@ -557,9 +558,16 @@ const useStore = create<AppState>((set, get) => ({
     }
 
     const edge = edges.find(
-      (edge) =>
-        edge.data?.sourcefieldId === target.sourceFieldId &&
-        edge.data?.targetfieldId === target.targetFieldId,
+      (edge) => {
+        const edgeData = edge.data as TableEdgeData | undefined;
+        const sourceMatches =
+          edgeData?.sourcefieldId === target.sourceFieldId ||
+          edgeData?.sourceFieldIds?.[0] === target.sourceFieldId;
+        const targetMatches =
+          edgeData?.targetfieldId === target.targetFieldId ||
+          edgeData?.targetFieldIds?.[0] === target.targetFieldId;
+        return sourceMatches && targetMatches;
+      },
     );
     set({
       pendingFlowFocus: {
@@ -626,10 +634,16 @@ const useStore = create<AppState>((set, get) => ({
         selected: false,
       }));
     const edges = get().edges.map((edge) => {
+      const edgeData = edge.data as TableEdgeData | undefined;
+      const sourceMatches =
+        edgeData?.sourcefieldId === request.sourceFieldId ||
+        edgeData?.sourceFieldIds?.[0] === request.sourceFieldId;
+      const targetMatches =
+        edgeData?.targetfieldId === request.targetFieldId ||
+        edgeData?.targetFieldIds?.[0] === request.targetFieldId;
       const selected =
         edge.id === request.edgeId ||
-        (edge.data?.sourcefieldId === request.sourceFieldId &&
-          edge.data?.targetfieldId === request.targetFieldId);
+        (sourceMatches && targetMatches);
       return {
         ...edge,
         selected,

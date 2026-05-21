@@ -519,6 +519,18 @@ function parseEndpoint(
   tableAliases: Map<string, { schema: string; tableName: string }>,
 ) {
   const value = raw.trim().replace(/,$/u, "");
+  const compositeMatch = value.match(/^(.*)\.\((.+)\)$/u);
+  if (compositeMatch) {
+    const tablePart = compositeMatch[1]!.trim();
+    const firstField = compositeMatch[2]!
+      .split(",")
+      .map((field) => unquoteIdentifierPart(field))
+      .find(Boolean);
+    if (!firstField) {
+      return null;
+    }
+    return parseEndpoint(`${tablePart}.${firstField}`, tableAliases);
+  }
   const parts = splitPath(value).map(unquoteIdentifierPart);
   if (parts.length < 2) return null;
   const fieldName = parts[parts.length - 1]!;

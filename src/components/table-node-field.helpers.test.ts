@@ -146,3 +146,33 @@ test("fields stay idle when the hovered ref edge does not include them", () => {
     false,
   );
 });
+
+test("fields become active when they belong to a hovered composite edge", () => {
+  const edges = [
+    {
+      id: "composite-edge",
+      data: {
+        sourcefieldId: "f-ecommerce.merchant_periods.merchant_id",
+        targetfieldId: "f-ecommerce.merchants.id",
+        sourceFieldIds: [
+          "f-ecommerce.merchant_periods.merchant_id",
+          "f-ecommerce.merchant_periods.country_code",
+        ],
+        targetFieldIds: [
+          "f-ecommerce.merchants.id",
+          "f-ecommerce.merchants.country_code",
+        ],
+        isComposite: true,
+      },
+    },
+  ];
+
+  assert.equal(
+    isFieldConnectedToHoveredEdge(
+      "f-ecommerce.merchant_periods.country_code",
+      edges,
+      "composite-edge",
+    ),
+    true,
+  );
+});

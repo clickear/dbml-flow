@@ -91,13 +91,17 @@ function TableEdge({
         onDoubleClick={(event) => {
           event.stopPropagation();
           const tableEdgeData = data as TableEdgeData | undefined;
-          if (!tableEdgeData?.sourcefieldId || !tableEdgeData?.targetfieldId) {
+          const sourceFieldId =
+            tableEdgeData?.sourceFieldIds?.[0] ?? tableEdgeData?.sourcefieldId;
+          const targetFieldId =
+            tableEdgeData?.targetFieldIds?.[0] ?? tableEdgeData?.targetfieldId;
+          if (!sourceFieldId || !targetFieldId) {
             return;
           }
           useStore.getState().jumpToSource({
             kind: "edge",
-            sourceFieldId: tableEdgeData.sourcefieldId,
-            targetFieldId: tableEdgeData.targetfieldId,
+            sourceFieldId,
+            targetFieldId,
           });
         }}
       />

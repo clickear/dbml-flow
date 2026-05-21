@@ -153,6 +153,17 @@ test("maps standalone refs with trailing line comments", () => {
   );
 });
 
+test("maps composite refs for editor-to-canvas navigation", () => {
+  const code = `Table ecommerce.merchant_periods {\n  merchant_id int\n  country_code int\n}\nTable ecommerce.merchants {\n  id int\n  country_code int\n}\nRef: ecommerce.merchant_periods.(merchant_id, country_code) > ecommerce.merchants.(id, country_code)\n`;
+  const sourceMap = buildDbmlSourceMap(code);
+
+  assert.deepEqual(sourceMap.findTargetAtPosition({ lineNumber: 9, column: 2 }), {
+    kind: "edge",
+    sourceFieldId: "f-ecommerce.merchant_periods.merchant_id",
+    targetFieldId: "f-ecommerce.merchants.id",
+  });
+});
+
 test("maps table aliases in declarations and refs with unicode table names", () => {
   const code = `Table 中文 as f{\n  test int [not null]\n}\nTable users {\n  id int [pk]\n}\nRef: f.test - users.id\n`;
   const sourceMap = buildDbmlSourceMap(code);

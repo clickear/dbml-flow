@@ -49,12 +49,28 @@ function getHeaderRowWidth(table: Table): number {
     return labelWidth + FOLD_BUTTON_WIDTH + noteWidth + HEADER_PADDING_X;
 }
 
-function getContentWidth(table: Table): number {
-    return Math.max(getFieldRowWidth(table), getHeaderRowWidth(table));
+function getCompositeRowWidth(compositeRelationLabels: string[] = []): number {
+    return Math.max(
+        0,
+        ...compositeRelationLabels.map(
+            (label) =>
+                getTextWidth(label, FIELD_FONT) +
+                INLINE_PADDING * 2 +
+                FIELD_BORDER * 2,
+        ),
+    );
 }
 
-export function findClosestSize(table: Table) {
-    const contentWidth = getContentWidth(table);
+function getContentWidth(table: Table, compositeRelationLabels: string[] = []): number {
+    return Math.max(
+        getFieldRowWidth(table),
+        getHeaderRowWidth(table),
+        getCompositeRowWidth(compositeRelationLabels),
+    );
+}
+
+export function findClosestSize(table: Table, compositeRelationLabels: string[] = []) {
+    const contentWidth = getContentWidth(table, compositeRelationLabels);
     const width =
         tableWidth.find((s) => contentWidth <= s.width)?.width ??
         Math.ceil(contentWidth / TABLE_WIDTH_STEP) * TABLE_WIDTH_STEP;
@@ -64,9 +80,9 @@ export function findClosestSize(table: Table) {
     };
 }
 
-export function guessSize(table: Table) {
+export function guessSize(table: Table, compositeRelationLabels: string[] = []) {
     return {
-        width: getContentWidth(table),
+        width: getContentWidth(table, compositeRelationLabels),
         height: getHeight(table),
     };
 }

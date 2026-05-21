@@ -37,6 +37,8 @@ type EdgeFieldLike = {
   data?: {
     sourcefieldId?: string;
     targetfieldId?: string;
+    sourceFieldIds?: string[];
+    targetFieldIds?: string[];
   };
 };
 
@@ -70,8 +72,12 @@ export function isFieldConnectedToHoveredEdge(
     return false;
   }
 
-  return (
-    hoveredEdge.data.sourcefieldId === fieldId ||
-    hoveredEdge.data.targetfieldId === fieldId
-  );
+  const fieldIds = [
+    hoveredEdge.data.sourcefieldId,
+    hoveredEdge.data.targetfieldId,
+    ...(hoveredEdge.data.sourceFieldIds ?? []),
+    ...(hoveredEdge.data.targetFieldIds ?? []),
+  ].filter((value): value is string => !!value);
+
+  return fieldIds.includes(fieldId);
 }

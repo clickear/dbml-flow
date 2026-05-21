@@ -33,6 +33,11 @@ test("derives one composite row for the source table", () => {
   assert.equal(rows.length, 1);
   assert.equal(rows[0]?.label, "(merchant_id, country_code)");
   assert.equal(rows[0]?.edgeId, "ref-1");
+  assert.equal(
+    rows[0]?.sourceFieldId,
+    "f-ecommerce.merchant_periods.merchant_id",
+  );
+  assert.equal(rows[0]?.targetFieldId, "f-ecommerce.merchants.id");
 });
 
 test("derives one composite row for the target table", () => {
@@ -43,4 +48,9 @@ test("derives one composite row for the target table", () => {
   assert.equal(rows.length, 1);
   assert.equal(rows[0]?.label, "(id, country_code)");
   assert.equal(rows[0]?.edgeId, "ref-1");
+  assert.equal(rows[0]?.sourceFieldId, "f-ecommerce.merchants.id");
+  assert.equal(
+    rows[0]?.targetFieldId,
+    "f-ecommerce.merchant_periods.merchant_id",
+  );
 });

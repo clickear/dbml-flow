@@ -24,7 +24,7 @@
 | Ref / Relationship 定义 | `Ref: posts.user_id > users.id` | ✅ | 已支持基础关系渲染、双向编辑器跳转、高亮。 |
 | Inline Ref | `user_id int [ref: > users.id]` | ✅ | 已支持解析、渲染、source-map。 |
 | Many-to-many Ref | `authors.id <> books.id` | ✅ | 基础关系类型可解析；实际展示仍按普通边呈现。 |
-| Composite Foreign Keys | `Ref: merchant_periods.(merchant_id, country_code) > merchants.(id, country_code)` | ❌ | 当前只取每端 `fields[0]`，组合外键不能正确展示。 |
+| Composite Foreign Keys | `Ref: merchant_periods.(merchant_id, country_code) > merchants.(id, country_code)` | ✅ | 已支持单条关系边、两侧组合关系行，以及多列 hover/跳转/高亮。 |
 | Relationship Settings | `Ref: posts.user_id > users.id [delete: cascade, update: no action]` | ❌ | 当前没有消费 `delete/update` 等关系设置。 |
 | Relationship Line Color | `Ref: posts.user_id > users.id [color: #79AD51]` | ❌ | 当前边颜色由应用交互态控制，不读取 ref 的 `color`。 |
 | Enum 定义 | `enum job_status { created }` | ✅ | 已部分支持：字段 tooltip 可显示 enum 值；没有 enum 独立节点/跳转。 |
@@ -53,7 +53,7 @@
 - [x] Show relation fields only
 - [x] Show table header only
 - [x] Enums 
-- [ ] Composite foreign keys
+- [x] Composite foreign keys
 
 ## Notes 
 - [x] Floating Notes 
