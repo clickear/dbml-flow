@@ -7,9 +7,19 @@ export type CompositeRelationRow = {
   localFieldIds: string[];
   sourceFieldId: string;
   targetFieldId: string;
+  sourceHandleId: string;
+  targetHandleId: string;
   remoteTableName: string;
   fieldPairs: Array<{ local: string; remote: string }>;
 };
+
+export function getCompositeSourceHandleId(edgeId: string) {
+  return `cr-source-${edgeId}`;
+}
+
+export function getCompositeTargetHandleId(edgeId: string) {
+  return `cr-target-${edgeId}`;
+}
 
 export function getCompositeRowsForTable(
   tableId: string,
@@ -68,6 +78,8 @@ function buildRow(
     localFieldIds,
     sourceFieldId: localFieldIds[0] ?? "",
     targetFieldId: remoteFieldIds[0] ?? "",
+    sourceHandleId: getCompositeSourceHandleId(edgeId),
+    targetHandleId: getCompositeTargetHandleId(edgeId),
     remoteTableName: getTableNameFromId(remoteTableId),
     fieldPairs: localNames.map((local, index) => ({
       local,

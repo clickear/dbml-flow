@@ -1,7 +1,6 @@
 import type { CompositeRelationRow } from "@/lib/dbml/composite-relations";
 import useStore from "@/state/store";
 import { TableCompositeRelationsView } from "./table-composite-relations-view";
-import { CompositeRelationTooltipView } from "./table-tooltip/composite-relation-tooltip-view";
 
 export function TableCompositeRelations({
   rows,
@@ -26,12 +25,6 @@ export function TableCompositeRelations({
           targetFieldId: row.targetFieldId,
         });
       }}
-      renderTooltip={(row) => (
-        <CompositeRelationTooltipView
-          remoteTableName={row.remoteTableName}
-          fieldPairs={row.fieldPairs}
-        />
-      )}
     />
   );
 }

@@ -6,6 +6,10 @@ import {
 } from "@/types/nodes.types";
 import type { Database, Endpoint, Field, Ref } from "@dbml/core";
 import { uniqBy } from "lodash-es";
+import {
+  getCompositeSourceHandleId,
+  getCompositeTargetHandleId,
+} from "./composite-relations";
 import { findOutermostFoldedGroupId } from "./nested-group.parser";
 import { getFieldId, getGroupId, getTableId } from "./node-dmbl.parser";
 
@@ -43,24 +47,34 @@ export function mapToEdge(
   const targetfieldId = targetFieldIds[0];
   const isComposite = sourceFieldIds.length > 1 || targetFieldIds.length > 1;
 
+  const sourceHandleData = getHandleData(sourceField, sourceEndPoint, foldedIds, groupParentById);
   const {
-    handleId: sourceHandle,
+    handleId: defaultSourceHandle,
     marker: markerStart,
     folded: sourceFolded,
     relationType: sourceRelationType,
     nodeId: source,
-  } = getHandleData(sourceField, sourceEndPoint, foldedIds, groupParentById);
+  } = sourceHandleData;
 
+  const targetHandleData = getHandleData(targetField, targetEndPoint, foldedIds, groupParentById);
   const {
-    handleId: targetHandle,
+    handleId: defaultTargetHandle,
     marker: markerEnd,
     folded: targetFolded,
     relationType: targetRelationType,
     nodeId: target,
-  } = getHandleData(targetField, targetEndPoint, foldedIds, groupParentById);
+  } = targetHandleData;
+
+  const edgeId = ref.id.toString();
+  const sourceHandle = isComposite
+    ? getCompositeSourceHandleId(edgeId)
+    : defaultSourceHandle;
+  const targetHandle = isComposite
+    ? getCompositeTargetHandleId(edgeId)
+    : defaultTargetHandle;
 
   return <TableEdgeType>{
-    id: ref.id.toString(),
+    id: edgeId,
     source,
     target,
     type: TableEdgeTypeName,

@@ -5,7 +5,6 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { TableCompositeRelationsView } from "./table-composite-relations-view";
-import { CompositeRelationTooltipView } from "./table-tooltip/composite-relation-tooltip-view";
 
 globalThis.HTMLElement = class HTMLElement {} as typeof HTMLElement;
 
@@ -20,6 +19,8 @@ test("renders composite relationship rows with grouped labels", () => {
     ],
     sourceFieldId: "f-ecommerce.merchant_periods.merchant_id",
     targetFieldId: "f-ecommerce.merchants.id",
+    sourceHandleId: "cr-source-ref-1",
+    targetHandleId: "cr-target-ref-1",
     remoteTableName: "merchants",
     fieldPairs: [
       { local: "merchant_id", remote: "id" },
@@ -34,24 +35,22 @@ test("renders composite relationship rows with grouped labels", () => {
       onEdgeMouseEnter={() => {}}
       onEdgeMouseLeave={() => {}}
       onRowDoubleClick={() => {}}
-      renderTooltip={() => null}
+      renderHandle={(compositeRow, side) => (
+        <span
+          data-side={side}
+          data-handle-id={
+            side === "left"
+              ? compositeRow.targetHandleId
+              : compositeRow.sourceHandleId
+          }
+        />
+      )}
     />,
   );
 
   assert.match(html, /\(merchant_id, country_code\)/);
-});
-
-test("renders composite relationship tooltip details", () => {
-  const html = renderToStaticMarkup(
-    <CompositeRelationTooltipView
-      remoteTableName="merchants"
-      fieldPairs={[
-        { local: "merchant_id", remote: "id" },
-        { local: "country_code", remote: "country_code" },
-      ]}
-    />,
-  );
-
-  assert.match(html, /Composite FK -&gt; merchants/);
-  assert.match(html, /merchant_id -&gt; id/);
+  assert.match(html, /data-handle-id="cr-source-ref-1"/);
+  assert.match(html, /data-handle-id="cr-target-ref-1"/);
+  assert.doesNotMatch(html, /Composite FK/);
+  assert.doesNotMatch(html, /merchant_id -&gt; id/);
 });

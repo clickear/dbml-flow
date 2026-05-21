@@ -32,6 +32,8 @@ Ref: ecommerce.merchant_periods.(merchant_id, country_code) > ecommerce.merchant
 
   assert.equal(edges.length, 1);
   assert.equal(edges[0]?.data.isComposite, true);
+  assert.equal(edges[0]?.sourceHandle, "cr-source-1");
+  assert.equal(edges[0]?.targetHandle, "cr-target-1");
   assert.deepEqual(edges[0]?.data.sourceFieldIds, [
     "f-ecommerce.merchant_periods.merchant_id",
     "f-ecommerce.merchant_periods.country_code",
@@ -62,6 +64,8 @@ Ref: orders.user_id > users.id
 
   assert.equal(edges.length, 1);
   assert.equal(edges[0]?.data.isComposite, false);
+  assert.equal(edges[0]?.sourceHandle, "f-public.orders.user_id");
+  assert.equal(edges[0]?.targetHandle, "f-public.users.id");
   assert.equal(edges[0]?.data.sourcefieldId, "f-public.orders.user_id");
   assert.equal(edges[0]?.data.targetfieldId, "f-public.users.id");
   assert.deepEqual(edges[0]?.data.sourceFieldIds, ["f-public.orders.user_id"]);
