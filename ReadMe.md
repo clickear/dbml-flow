@@ -31,8 +31,8 @@
 | Note 定义（结构注释） | `Note: '...'` / `Note { '...' }` | ✅ | 表 note、字段 note 已支持。 |
 | Sticky Notes | `Note note_name { '...' }` | ✅ | 已支持浮动画布 note、attached-top note、编辑器双向跳转。 |
 | TableGroup | `TableGroup e_commerce { merchants countries }` | ✅ | 已支持分组渲染、折叠、结构树。 |
-| TableGroup Note | `TableGroup g [note: '...'] { ... }` / `Note: '...'` | ❌ | 当前没有 group note 展示。 |
-| TableGroup Settings | `TableGroup g [color: #345] { ... }` | ✅ | 已支持 `color`；`note` 语法可解析但未展示。 |
+| TableGroup Note | `TableGroup g [note: '...'] { ... }` / `Note: '...'` | ✅ | 已支持在分组头部显示 note 图标并通过 tooltip 展示内容。 |
+| TableGroup Settings | `TableGroup g [color: #345] { ... }` | ✅ | 已支持 `color` 和 `note`。 |
 | TablePartial | `TablePartial base { ... }` / `~base` | ❌ | 当前没有 TablePartial 注入后的可视化校验、source-map、编辑器完整支持。 |
 | Records / Data Sample | `records users(id, name) { 1, 'Alice' }` | ❌ | 当前没有 records 渲染、跳转或高亮支持。 |
 | Multi-line String | `''' multi line '''` | ✅ | note/sticky note 多行字符串已可用。 |

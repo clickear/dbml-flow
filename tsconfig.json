@@ -19,7 +19,7 @@
     "jsx": "react-jsx"
   },
   "include": ["src", "vite-env.d.ts"],
-  "exclude": ["src/**/*.test.ts"],
+  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx"],
   "references": [
     {
       "path": "./tsconfig.node.json"

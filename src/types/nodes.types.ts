@@ -53,6 +53,7 @@ export type NoteNodeType = Node<NoteNodeData, "Note">;
 export type InternalNoteNode = InternalNode & { data: NoteNodeData };
 
 export type GroupNodeData = SharedNodeData & {
+  note?: string;
   nodeIds: string[];
   parentGroupId?: string;
   dimensions: {

@@ -5,12 +5,12 @@ import useStore from "@/state/store";
 import { type TableNodeType } from "@/types/nodes.types";
 import type { Field, Table } from "@dbml/core";
 import { type NodeProps, useUpdateNodeInternals } from "@xyflow/react";
-import { StickyNote } from "lucide-react";
 import { useCallback, useMemo } from "react";
 import { BaseNode } from "./base-node";
 import { TableFoldHeader } from "./table-fold-header";
 import { TableField } from "./table-node-field";
 import { TableFieldTooltipView } from "./table-tooltip/table-field-tooltip-view";
+import { HeaderNoteAdornment } from "./table-tooltip/header-note-adornment";
 import { TableHeaderTooltipView } from "./table-tooltip/table-header-tooltip-view";
 import {
   TableTooltip,
@@ -19,7 +19,6 @@ import {
   TableTooltipTrigger,
 } from "./table-tooltip/table-tooltip";
 import { TableBody } from "./ui/table";
-
 function buildField(field: Field, table: Table, isRelationOnly: boolean) {
   const hasDetails = hasFieldDetails(field);
   if (!hasDetails)
@@ -67,16 +66,13 @@ function Header({
     return <TableFoldHeader {...sharedProps} />;
   }
 
-  const noteIcon = (
-    <span className="inline-flex min-w-[1.25rem] shrink-0 items-center pl-1">
-      <StickyNote size="1rem" />
-    </span>
-  );
-
   return (
     <TableTooltip>
       <TableTooltipTrigger>
-        <TableFoldHeader {...sharedProps} afterTitle={noteIcon} />
+        <TableFoldHeader
+          {...sharedProps}
+          afterTitle={<HeaderNoteAdornment note={data.table.note} />}
+        />
       </TableTooltipTrigger>
       <TableTooltipContent>
         <TableHeaderTooltipView table={data.table} />

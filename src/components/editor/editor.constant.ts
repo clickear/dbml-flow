@@ -135,7 +135,7 @@ Ref: ecommerce.product_tags.id <> ecommerce.products.id // many-to-many
 Ref: ecommerce.merchant_periods.(merchant_id, country_code) > ecommerce.merchants.(id, country_code)
 Ref user_orders: ecommerce.orders.user_id > public.users.id
 
-TableGroup ecommerce [color: #20B2AA] {
+TableGroup ecommerce [color: #20B2AA, note: 'E-commerce domain tables'] {
   ecommerce.merchants
   ecommerce.merchant_periods
   ecommerce.products

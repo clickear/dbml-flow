@@ -6,6 +6,7 @@
 - Added attached-top sticky notes for tables and table groups, with expand/collapse transitions between owner bars and floating notes.
 - Added detached sticky-note persistence so dragging an attached folded note turns it into an independent floating note across reloads and saved views.
 - Added a DBML feature support matrix to `ReadMe.md`, comparing official syntax coverage against the current app behavior.
+- Added `TableGroup` header note icons and tooltips for DBML group notes.
 - Table field rows now reuse the shared highlight colors for direct hover, related table hover, and ref hover.
 - Hovering a ref now highlights both endpoint fields with the same field hover treatment.
 

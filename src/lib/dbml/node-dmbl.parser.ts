@@ -71,6 +71,7 @@ function mapToGroupNode(
     position: { x: 0, y: 0 },
     data: {
       label: g.name,
+      note: g.note,
       nodeIds: [...groupChildIds, ...tableChildIds],
       parentGroupId,
       color: g.color,

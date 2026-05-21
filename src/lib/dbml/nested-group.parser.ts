@@ -29,6 +29,7 @@ type ParsedTableGroupBlock = {
   rawName: string;
   settings: string;
   body: string;
+  preservedBodyLines: string[];
 };
 
 const DEFAULT_SCHEMA = "public";
@@ -66,9 +67,10 @@ export function preprocessNestedTableGroups(code: string): NestedGroupModel {
   for (const block of [...blocks].reverse()) {
     const def = groups.get(block.name)!;
     const tableMembers = def.members.filter((m) => m.kind === "table");
-    const sanitizedBody = tableMembers
-      .map((m) => formatIdentifier(m.name))
-      .join("\n  ");
+    const sanitizedBody = [
+      ...block.preservedBodyLines,
+      ...tableMembers.map((m) => formatIdentifier(m.name)),
+    ].join("\n  ");
     const settingsPart = def.settings ? ` [${def.settings}]` : "";
     const replacement = `TableGroup ${block.rawName}${settingsPart} {\n  ${sanitizedBody}\n}`;
     sanitizedCode =
@@ -118,6 +120,7 @@ function extractTableGroupBlocks(code: string): ParsedTableGroupBlock[] {
       rawName: nameToken.raw,
       settings,
       body,
+      preservedBodyLines: extractPreservedBodyLines(body),
     });
     marker.lastIndex = bodyEnd + 1;
   }
@@ -155,7 +158,16 @@ function parseMembers(body: string): NestedGroupMember[] {
     .split(/[,|\n]/)
     .map((part) => part.trim())
     .filter(Boolean)
+    .filter((part) => !/^note\s*:/iu.test(part))
     .map((name) => ({ kind: "table" as const, name: normalizeIdentifierText(name) }));
+}
+
+function extractPreservedBodyLines(body: string): string[] {
+  return body
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .filter((line) => /^note\s*:/iu.test(line));
 }
 
 function formatIdentifier(name: string): string {
