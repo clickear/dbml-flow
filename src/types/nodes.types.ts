@@ -72,6 +72,9 @@ export type ERRelationTypes = "oneOptionnal" | "one" | "many";
 export type TableEdgeData = {
   sourcefieldId: string;
   targetfieldId: string;
+  sourceFieldIds: string[];
+  targetFieldIds: string[];
+  isComposite: boolean;
   ref: Ref;
   sourceRelationType: ERRelationTypes;
   targetRelationType: ERRelationTypes;

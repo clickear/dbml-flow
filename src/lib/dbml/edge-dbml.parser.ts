@@ -33,10 +33,15 @@ export function mapToEdge(
   const sourceEndPoint = ref.endpoints[0];
   const targetEndPoint = ref.endpoints[1];
 
-  const sourceField = sourceEndPoint.fields[0];
-  const sourcefieldId = getFieldId(sourceField);
-  const targetField = targetEndPoint.fields[0];
-  const targetfieldId = getFieldId(targetField);
+  const sourceFields = sourceEndPoint.fields;
+  const targetFields = targetEndPoint.fields;
+  const sourceField = sourceFields[0];
+  const targetField = targetFields[0];
+  const sourceFieldIds = sourceFields.map((field) => getFieldId(field)!);
+  const targetFieldIds = targetFields.map((field) => getFieldId(field)!);
+  const sourcefieldId = sourceFieldIds[0];
+  const targetfieldId = targetFieldIds[0];
+  const isComposite = sourceFieldIds.length > 1 || targetFieldIds.length > 1;
 
   const {
     handleId: sourceHandle,
@@ -66,6 +71,9 @@ export function mapToEdge(
     data: {
       sourcefieldId,
       targetfieldId,
+      sourceFieldIds,
+      targetFieldIds,
+      isComposite,
       ref,
       sourceRelationType,
       targetRelationType,

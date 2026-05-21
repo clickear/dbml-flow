@@ -56,3 +56,14 @@ test("expands table width beyond preset buckets for long dictionary types", () =
 
   assert.ok(findClosestSize(table).width > 300);
 });
+
+test("expands table width for composite relationship row labels", () => {
+  installTextMeasurementStub();
+  const table = tableWithFieldType("int");
+  table.name = "merchant_periods";
+  (
+    table as unknown as { compositeRelationLabels?: string[] }
+  ).compositeRelationLabels = ["(merchant_id, country_code)"];
+
+  assert.ok(findClosestSize(table).width >= 250);
+});
